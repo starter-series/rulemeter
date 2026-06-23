@@ -35,7 +35,7 @@ test("CLI audit emits JSON", async () => {
   assert.equal(payload.schemaVersion, "rulemeter.audit.v1");
   assert.equal(payload.tokenizer, "cl100k_base");
   assert.equal(payload.candidates.length, 1);
-  assert.equal(payload.candidates[0].recommendation, "candidate");
+  assert.equal(payload.candidates[0].recommendation, "remove_duplicate");
 });
 
 test("CLI count reports tokens", async () => {
@@ -79,6 +79,24 @@ test("CLI errors on unknown explicit tokenizer", async () => {
   );
 });
 
+test("CLI explains unsupported Claude and Gemini model names", async () => {
+  for (const model of ["claude-opus-4", "gemini-1.5-pro"]) {
+    await assert.rejects(
+      execFileAsync(process.execPath, ["dist/cli.js", "count", "hello", "--json", "--model", model], {
+        cwd: process.cwd(),
+      }),
+      (error) => {
+        const payload = JSON.parse(error.stderr);
+        assert.equal(payload.schemaVersion, "rulemeter.error.v1");
+        assert.equal(payload.error.code, "TOKENIZER_NOT_FOUND");
+        assert.match(payload.error.message, /js-tiktoken model mappings/);
+        assert.match(payload.error.message, /approximation/);
+        return true;
+      },
+    );
+  }
+});
+
 test("CLI allows explicit fallback only when requested", async () => {
   const { stdout } = await execFileAsync(
     process.execPath,
@@ -103,4 +121,5 @@ test("CLI audit reads config file", async () => {
   const payload = JSON.parse(stdout);
   assert.equal(payload.tokenizer, "cl100k_base");
   assert.match(payload.candidates[0].rule, /^RM_/);
+  assert.equal(payload.candidates[0].recommendation, "remove_duplicate");
 });

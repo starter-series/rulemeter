@@ -15,8 +15,15 @@ export class TokenizerLoadError extends Error {
   readonly code = "TOKENIZER_NOT_FOUND";
 
   constructor(readonly option: "encoding" | "model", readonly value: string) {
-    super(`unknown ${option}: ${value}`);
+    super(tokenizerErrorMessage(option, value));
   }
+}
+
+function tokenizerErrorMessage(option: "encoding" | "model", value: string): string {
+  if (option === "model" && /^(claude|gemini)/iu.test(value)) {
+    return `unsupported model: ${value}. --model uses js-tiktoken model mappings; for Claude or Gemini instruction files, pass --encoding o200k_base or --encoding cl100k_base as an approximation.`;
+  }
+  return `unknown ${option}: ${value}`;
 }
 
 export class RegexTokenCounter implements TokenCounter {

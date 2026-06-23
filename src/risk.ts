@@ -33,19 +33,19 @@ export const riskRules: RiskRule[] = [
       /\bsole author\b/i,
       /\bCo-Authored-By\b/i,
       /\bexternal surface\b/i,
-      /정체성|실명|공개\s*이름|작성자/u,
+      /정체성|실명|공개\s*이름|커밋\s*작성자/u,
     ],
   },
   {
     label: "pii",
     patterns: [
       /\bPII\b/i,
-      /\bemail\b/i,
+      /\bemail\s+(?:address|account|header|recipient)\b/i,
       /\bAPI key\b/i,
       /\b(?:api|access|auth|bearer|secret)\s+token\b/i,
       /\baccount identifier\b/i,
       /\breference number\b/i,
-      /개인정보|이메일|계정|토큰|키|식별자/u,
+      /개인정보|이메일\s*(?:주소|계정)?|계정\s*식별자|토큰|API\s*키|시크릿|식별자/u,
     ],
   },
   {
@@ -80,8 +80,7 @@ export const riskRules: RiskRule[] = [
   {
     label: "logs_or_errors",
     patterns: [
-      /\blog\b/i,
-      /\blogs\b/i,
+      /\blog(?:s|ged|ging)?\b(?!\s+in\b)/i,
       /\berror\b/i,
       /\btraceback\b/i,
       /\bstack trace\b/i,
@@ -93,7 +92,14 @@ export const riskRules: RiskRule[] = [
   },
   {
     label: "security_policy",
-    patterns: [/\bsecurity\b/i, /\bCVE\b/i, /\bvulnerability\b/i, /\bsecret\b/i, /\bpermission\b/i, /보안|취약점|권한|시크릿/u],
+    patterns: [
+      /\bsecurity\b/i,
+      /\bCVE\b/i,
+      /\bvulnerability\b/i,
+      /\bsecret\b/i,
+      /\b(?:sandbox|filesystem|network|approval)\s+permissions?\b/i,
+      /보안|취약점|권한\s*(?:정책|승인|상승)|시크릿/u,
+    ],
   },
 ];
 

@@ -18,9 +18,18 @@ It is not a general prompt compressor and it does not rewrite files. Its job is 
 
 ## Install
 
+From a clone:
+
 ```bash
 npm install
 npm run build
+node dist/cli.js audit AGENTS.md CLAUDE.md task.txt
+```
+
+After package installation, use the `rulemeter` binary:
+
+```bash
+rulemeter audit AGENTS.md CLAUDE.md task.txt
 ```
 
 ## Usage
@@ -35,12 +44,17 @@ rulemeter count "RULE_01 = preserve existing module boundaries" --encoding o200k
 From source:
 
 ```bash
+node dist/cli.js audit AGENTS.md CLAUDE.md task.txt
 npm run dogfood
 ```
 
 `RuleMeter` uses `js-tiktoken` by default and tries `o200k_base`, then `cl100k_base`. Pass `--encoding cl100k_base`, `--encoding o200k_base`, or `--model <name>` when you need an explicit tokenizer.
 
+`js-tiktoken` is an OpenAI tokenizer implementation. For Claude, Gemini, Copilot, and Antigravity instruction files, token counts are useful as a consistent approximation and comparison signal, not as vendor billing-token truth. `--model` accepts model names known to `js-tiktoken`; for Claude or Gemini files, pass `--encoding o200k_base` or `--encoding cl100k_base` explicitly.
+
 If the default tokenizer cannot be loaded, output falls back to `fallback_regex` and emits an `APPROXIMATE_TOKENIZER` warning. If you explicitly pass `--encoding` or `--model`, unknown tokenizer names fail instead of silently falling back. Use `--allow-fallback` only when approximate token counts are acceptable.
+
+Exact duplicated rules usually save more by deleting the duplicate line than by introducing a legend plus alias. RuleMeter reports that as `remove_duplicate`; use alias candidates only when duplicate text must remain in multiple instruction surfaces.
 
 ## JSON Contract
 
@@ -74,6 +88,7 @@ CLI flags override config values.
 |---|---|
 | `candidate` | Alias could save tokens and no high-risk label was detected. |
 | `keep_explicit` | The rule mentions identity, PII, approval, tests, strategy ratification, logs, errors, or security. |
+| `remove_duplicate` | Exact duplicate text was found; deleting duplicate occurrences saves more than introducing an alias. |
 | `do_not_alias` | Alias is not useful under the current thresholds. |
 | `below_breakeven` | Alias might help later, but current repeat count is too low. |
 
@@ -87,7 +102,14 @@ CLI flags override config values.
 - `logs_or_errors`
 - `security_policy`
 
-These default to `keep_explicit` because preserving critical instructions is more important than saving tokens.
+These default to `keep_explicit` because preserving critical instructions is more important than saving tokens. Risk labels are conservative keyword matches, not semantic classification; expect some false positives.
+
+## Limits
+
+- RuleMeter only groups exact normalized duplicate text. It does not detect semantically similar rules yet.
+- Token counts use OpenAI tokenizers by default, so non-OpenAI agent files should treat numbers as approximations.
+- Stable prefix files such as `AGENTS.md` and `CLAUDE.md` may be cached by their host tools, so token savings can be less valuable than dynamic prompt savings.
+- Markdown code fences, tables, blockquotes, and indented code are skipped; RuleMeter focuses on prose/list instruction text.
 
 ## Verification
 

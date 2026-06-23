@@ -17,7 +17,7 @@ test("computeBreakeven includes legend cost", () => {
   assert.equal(computeBreakeven(2, 2, 4), null);
 });
 
-test("repeated low-risk rule is a candidate", async () => {
+test("repeated low-risk rule prefers duplicate removal before aliasing", async () => {
   const path = await tempFile(
     "task.md",
     [
@@ -28,13 +28,49 @@ test("repeated low-risk rule is a candidate", async () => {
   const report = await auditRules([path], { counter: new RegexTokenCounter(), minTokens: 5 });
   assert.equal(report.schemaVersion, "rulemeter.audit.v1");
   assert.equal(report.candidates.length, 1);
-  assert.equal(report.candidates[0].recommendation, "candidate");
+  assert.equal(report.candidates[0].recommendation, "remove_duplicate");
   assert.ok(report.candidates[0].savedTokens > 0);
+  assert.ok(report.candidates[0].duplicateSavedTokens > report.candidates[0].savedTokens);
 });
 
 test("generic authoring and strategy words do not trigger high-risk labels alone", () => {
   const labels = classifyRisks("Use a clear authoring strategy for small helper functions.");
   assert.deepEqual(labels, []);
+});
+
+test("common app words do not trigger high-risk labels alone", () => {
+  const cases = [
+    "Respect the user tool permission settings.",
+    "Log in the user and redirect.",
+    "Send a confirmation email.",
+    "검색 키워드 입력란을 유지하세요.",
+    "문서 작성자 정보를 표시하세요.",
+  ];
+  for (const text of cases) assert.deepEqual(classifyRisks(text), [], text);
+});
+
+test("markdown code fences tables and blockquotes are skipped", async () => {
+  const path = await tempFile(
+    "CLAUDE.md",
+    [
+      "```bash",
+      "npm run build && npm test",
+      "```",
+      "",
+      "| Command | Meaning |",
+      "|---|---|",
+      "| npm test | test |",
+      "",
+      "> Quote this warning twice for context.",
+      "> Quote this warning twice for context.",
+      "",
+      "- Preserve the existing module boundaries and keep edits narrowly scoped to the requested behavior.",
+      "- Preserve the existing module boundaries and keep edits narrowly scoped to the requested behavior.",
+    ].join("\n"),
+  );
+  const report = await auditRules([path], { counter: new RegexTokenCounter(), minTokens: 5 });
+  assert.equal(report.candidates.length, 1);
+  assert.equal(report.candidates[0].text, "Preserve the existing module boundaries and keep edits narrowly scoped to the requested behavior.");
 });
 
 test("identity and PII rules stay explicit", async () => {
