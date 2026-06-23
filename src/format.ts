@@ -12,6 +12,11 @@ function locationsText(candidate: RuleCandidate): string {
 
 export function formatAuditTable(report: AuditReport): string {
   const lines: string[] = [`tokenizer: ${report.tokenizer}`];
+  if (report.configPath) lines.push(`config: ${report.configPath}`);
+  if (report.preset) lines.push(`preset: ${report.preset}`);
+  if (report.discoveredFiles && report.discoveredFiles.length > 0) {
+    lines.push(`discovered_files: ${report.discoveredFiles.join(", ")}`);
+  }
   for (const warning of report.warnings) {
     lines.push(`warning: ${warning.code} - ${warning.message}`);
   }

@@ -36,6 +36,8 @@ rulemeter audit AGENTS.md CLAUDE.md task.txt
 
 ```bash
 rulemeter audit AGENTS.md CLAUDE.md task.txt
+rulemeter audit --preset all
+rulemeter audit --preset claude --list-files
 rulemeter audit AGENTS.md --json --encoding cl100k_base
 rulemeter audit AGENTS.md --config rulemeter.config.json
 rulemeter count "RULE_01 = preserve existing module boundaries" --encoding o200k_base
@@ -66,6 +68,27 @@ Machine-readable output includes a stable `schemaVersion`:
 
 Treat new keys as additive. Existing v1 key names are intended to stay stable.
 
+Table output uses the compact column name `dedupe_saved`; JSON uses `duplicateSavedTokens` for the same value.
+
+## Presets
+
+Use `--preset <name>` to discover known agent-instruction files from the current directory. Presets can be combined with explicit file paths; generated, dependency, and test fixture folders such as `node_modules/`, `dist/`, `.git/`, `coverage/`, `fixtures/`, `test/`, and `tests/` are skipped.
+
+| Preset | Discovered files |
+|---|---|
+| `codex` | `AGENTS.md`, `AGENTS.override.md` in the repo tree |
+| `claude` | `CLAUDE.md`, `.claude/CLAUDE.md`, `.claude/rules/**/*.md`, `.claude/skills/**/*.md` |
+| `copilot` | `AGENTS.md`, `AGENTS.override.md`, root `CLAUDE.md`, root `GEMINI.md`, `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md` |
+| `antigravity` | root `AGENTS.md`, root `GEMINI.md`, `.agents/agents.md`, `.agents/skills/**/*.md`, `.agents/workflows/**/*.md` |
+| `all` | Union of all presets |
+
+Preview discovery without auditing:
+
+```bash
+rulemeter audit --preset all --list-files
+rulemeter audit --preset all --list-files --json
+```
+
 ## Config
 
 `RuleMeter` auto-loads `rulemeter.config.json` from the current directory when present. You can also pass `--config <path>`.
@@ -81,6 +104,8 @@ Treat new keys as additive. Existing v1 key names are intended to stay stable.
 ```
 
 CLI flags override config values.
+
+When a config file is loaded, table output prints `config: <path>` and JSON output includes `configPath`.
 
 ## Recommendations
 
