@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { existsSync, statSync } from "node:fs";
 import { auditRules } from "./audit.js";
-import { loadRulemeterConfig, type RulemeterConfig } from "./config.js";
+import { loadRulemeterConfigWithMeta, type RulemeterConfig } from "./config.js";
 import { formatAuditTable } from "./format.js";
-import { COUNT_SCHEMA_VERSION, ERROR_SCHEMA_VERSION } from "./schema.js";
+import { discoverPresetFiles, presetNames } from "./presets.js";
+import { COUNT_SCHEMA_VERSION, DISCOVERY_SCHEMA_VERSION, ERROR_SCHEMA_VERSION } from "./schema.js";
 import { loadTokenCounter, TokenizerLoadError } from "./tokenizer.js";
 
 const VERSION = "0.1.0";
@@ -12,7 +13,7 @@ function help(): string {
   return `rulemeter — audit agent instruction files for alias break-even and compression risk.
 
 Usage
-  rulemeter audit <file...> [--json] [--config PATH] [--encoding NAME] [--model NAME] [--allow-fallback] [--min-tokens N] [--min-repeats N] [--alias-prefix RULE]
+  rulemeter audit <file...> [--json] [--config PATH] [--preset NAME] [--list-files] [--encoding NAME] [--model NAME] [--allow-fallback] [--min-tokens N] [--min-repeats N] [--alias-prefix RULE]
   rulemeter count <text> [--json] [--config PATH] [--encoding NAME] [--model NAME] [--allow-fallback]
   rulemeter --version
   rulemeter --help
@@ -21,6 +22,7 @@ Examples
   rulemeter audit AGENTS.md CLAUDE.md task.txt
   rulemeter audit AGENTS.md --json --encoding cl100k_base
   rulemeter audit AGENTS.md --config rulemeter.config.json
+  rulemeter audit --preset all --list-files
   rulemeter count "RULE_01 = preserve existing module boundaries" --encoding o200k_base
 `;
 }
@@ -35,7 +37,7 @@ function takeValue(args: string[], flag: string, fallback: string): string {
   const index = args.indexOf(flag);
   if (index === -1) return fallback;
   const value = args[index + 1];
-  if (!value || value.startsWith("--")) throw new Error(`${flag} requires a value`);
+  if (!value || value.startsWith("--")) throw new CliError("INVALID_OPTION", `${flag} requires a value`);
   args.splice(index, 2);
   return value;
 }
@@ -66,6 +68,16 @@ function assertTokenizerChoice(encoding: string, model: string): void {
   if (encoding && model) throw new CliError("INVALID_OPTION", "--encoding and --model are mutually exclusive");
 }
 
+function assertPreset(preset: string): void {
+  if (preset && !(presetNames as string[]).includes(preset)) {
+    throw new CliError("INVALID_OPTION", `--preset must be one of: ${presetNames.join(", ")}`);
+  }
+}
+
+function unique(values: string[]): string[] {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+}
+
 function assertFiles(paths: string[]): void {
   if (paths.length === 0) throw new Error("audit requires at least one file");
   for (const path of paths) {
@@ -88,8 +100,12 @@ async function run(argv: string[]): Promise<number> {
   const command = args.shift();
   if (command === "audit") {
     const configPath = takeValue(args, "--config", "");
-    const config: RulemeterConfig = await loadRulemeterConfig(configPath || undefined);
+    const loadedConfig = await loadRulemeterConfigWithMeta(configPath || undefined);
+    const config: RulemeterConfig = loadedConfig.config;
     const json = takeBool(args, "--json");
+    const listFiles = takeBool(args, "--list-files");
+    const preset = takeValue(args, "--preset", "");
+    assertPreset(preset);
     const allowFallback = takeBool(args, "--allow-fallback") || config.allowFallback === true;
     const minTokens = positiveInteger(takeValue(args, "--min-tokens", String(config.minTokens ?? 12)), "--min-tokens");
     const minRepeats = positiveInteger(takeValue(args, "--min-repeats", String(config.minRepeats ?? 2)), "--min-repeats");
@@ -98,9 +114,32 @@ async function run(argv: string[]): Promise<number> {
     const model = mergeString(takeValue(args, "--model", ""), config.model, "");
     assertTokenizerChoice(encoding, model);
     assertNoUnknownFlags(args);
-    assertFiles(args);
+    const discoveredFiles = preset ? await discoverPresetFiles(preset) : [];
+    const files = unique([...args, ...discoveredFiles]);
+    assertFiles(files);
+
+    if (listFiles) {
+      const payload = {
+        schemaVersion: DISCOVERY_SCHEMA_VERSION,
+        configPath: loadedConfig.path,
+        preset: preset || null,
+        files,
+      };
+      if (json) {
+        console.log(JSON.stringify(payload, null, 2));
+      } else {
+        if (loadedConfig.path) console.log(`config: ${loadedConfig.path}`);
+        if (preset) console.log(`preset: ${preset}`);
+        console.log(files.join("\n"));
+      }
+      return 0;
+    }
+
     const counter = loadTokenCounter({ allowFallback, encoding: encoding || undefined, model: model || undefined });
-    const report = await auditRules(args, { minTokens, minRepeats, aliasPrefix, counter });
+    const report = await auditRules(files, { minTokens, minRepeats, aliasPrefix, counter });
+    report.configPath = loadedConfig.path;
+    report.preset = preset || null;
+    report.discoveredFiles = discoveredFiles;
     if (json) {
       console.log(JSON.stringify(report, null, 2));
     } else {
@@ -111,7 +150,8 @@ async function run(argv: string[]): Promise<number> {
 
   if (command === "count") {
     const configPath = takeValue(args, "--config", "");
-    const config: RulemeterConfig = await loadRulemeterConfig(configPath || undefined);
+    const loadedConfig = await loadRulemeterConfigWithMeta(configPath || undefined);
+    const config: RulemeterConfig = loadedConfig.config;
     const json = takeBool(args, "--json");
     const allowFallback = takeBool(args, "--allow-fallback") || config.allowFallback === true;
     const encoding = mergeString(takeValue(args, "--encoding", ""), config.encoding, "");
@@ -123,6 +163,7 @@ async function run(argv: string[]): Promise<number> {
     const counter = loadTokenCounter({ allowFallback, encoding: encoding || undefined, model: model || undefined });
     const payload = {
       schemaVersion: COUNT_SCHEMA_VERSION,
+      configPath: loadedConfig.path,
       tokenizer: counter.name,
       warnings: counter.name === "fallback_regex" ? [{ code: "APPROXIMATE_TOKENIZER", message: "Token counts are approximate." }] : [],
       tokens: counter.count(text),
@@ -132,6 +173,7 @@ async function run(argv: string[]): Promise<number> {
       console.log(JSON.stringify(payload, null, 2));
     } else {
       console.log(`tokenizer: ${payload.tokenizer}`);
+      if (payload.configPath) console.log(`config: ${payload.configPath}`);
       console.log(`tokens: ${payload.tokens}`);
     }
     return 0;

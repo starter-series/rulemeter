@@ -11,6 +11,11 @@ export interface RulemeterConfig {
   model?: string;
 }
 
+export interface LoadedRulemeterConfig {
+  config: RulemeterConfig;
+  path: string | null;
+}
+
 function assertObject(value: unknown, path: string): asserts value is Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error(`${path} must contain a JSON object`);
@@ -37,11 +42,11 @@ function optionalPositiveInteger(value: unknown, key: string): number | undefine
   return Number(value);
 }
 
-export async function loadRulemeterConfig(configPath?: string): Promise<RulemeterConfig> {
+export async function loadRulemeterConfigWithMeta(configPath?: string): Promise<LoadedRulemeterConfig> {
   const path = configPath ?? join(process.cwd(), "rulemeter.config.json");
   if (!existsSync(path)) {
     if (configPath) throw new Error(`config file not found: ${path}`);
-    return {};
+    return { config: {}, path: null };
   }
 
   let parsed: unknown;
@@ -53,11 +58,18 @@ export async function loadRulemeterConfig(configPath?: string): Promise<Rulemete
 
   assertObject(parsed, path);
   return {
-    aliasPrefix: optionalString(parsed.aliasPrefix, "aliasPrefix"),
-    allowFallback: optionalBoolean(parsed.allowFallback, "allowFallback"),
-    encoding: optionalString(parsed.encoding, "encoding"),
-    minRepeats: optionalPositiveInteger(parsed.minRepeats, "minRepeats"),
-    minTokens: optionalPositiveInteger(parsed.minTokens, "minTokens"),
-    model: optionalString(parsed.model, "model"),
+    config: {
+      aliasPrefix: optionalString(parsed.aliasPrefix, "aliasPrefix"),
+      allowFallback: optionalBoolean(parsed.allowFallback, "allowFallback"),
+      encoding: optionalString(parsed.encoding, "encoding"),
+      minRepeats: optionalPositiveInteger(parsed.minRepeats, "minRepeats"),
+      minTokens: optionalPositiveInteger(parsed.minTokens, "minTokens"),
+      model: optionalString(parsed.model, "model"),
+    },
+    path,
   };
+}
+
+export async function loadRulemeterConfig(configPath?: string): Promise<RulemeterConfig> {
+  return (await loadRulemeterConfigWithMeta(configPath)).config;
 }

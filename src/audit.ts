@@ -38,7 +38,10 @@ export interface AuditOptions {
 
 export interface AuditReport {
   schemaVersion: typeof AUDIT_SCHEMA_VERSION;
+  configPath?: string | null;
+  discoveredFiles?: string[];
   tokenizer: string;
+  preset?: string | null;
   files: string[];
   warnings: RulemeterWarning[];
   candidates: RuleCandidate[];
