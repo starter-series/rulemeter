@@ -1,0 +1,51 @@
+{
+  "name": "@starter-series/rulemeter",
+  "version": "0.1.0",
+  "description": "Audit agent instruction files for rule alias break-even, cache hints, and high-risk compression.",
+  "type": "module",
+  "bin": {
+    "rulemeter": "dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc && node scripts/mark-bin-executable.mjs",
+    "test": "npm run build && node --test test/*.test.js",
+    "dogfood": "npm run build && node dist/cli.js audit fixtures/AGENTS.md fixtures/CLAUDE.md fixtures/task.txt",
+    "pack:check": "npm run build && npm pack --dry-run --json"
+  },
+  "keywords": [
+    "agents",
+    "prompt",
+    "audit",
+    "tokens",
+    "cli",
+    "starter-series"
+  ],
+  "author": "heznpc",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/starter-series/rulemeter.git"
+  },
+  "bugs": {
+    "url": "https://github.com/starter-series/rulemeter/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "js-tiktoken": "^1.0.21"
+  }
+}
