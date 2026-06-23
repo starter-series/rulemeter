@@ -9,7 +9,7 @@ export interface Occurrence {
   line: number;
 }
 
-export type Recommendation = "candidate" | "keep_explicit" | "do_not_alias" | "below_breakeven";
+export type Recommendation = "candidate" | "keep_explicit" | "remove_duplicate" | "do_not_alias" | "below_breakeven";
 
 export interface RuleCandidate {
   rule: string;
@@ -22,6 +22,7 @@ export interface RuleCandidate {
   originalTokens: number;
   compressedTokens: number;
   savedTokens: number;
+  duplicateSavedTokens: number;
   breakeven: number | null;
   risks: RiskLabel[];
   recommendation: Recommendation;
@@ -59,6 +60,7 @@ export function extractSegments(source: string): Segment[] {
   const segments: Segment[] = [];
   let paragraph: string[] = [];
   let paragraphStart = 1;
+  let inFence = false;
 
   const flush = (): void => {
     if (paragraph.length === 0) return;
@@ -73,11 +75,30 @@ export function extractSegments(source: string): Segment[] {
     const line = lines[index] ?? "";
     const stripped = line.trim();
 
+    if (/^(```|~~~)/u.test(stripped)) {
+      flush();
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+
     if (stripped.length === 0) {
       flush();
       continue;
     }
     if (stripped.startsWith("#")) {
+      flush();
+      continue;
+    }
+    if (stripped.startsWith(">")) {
+      flush();
+      continue;
+    }
+    if (/^\|.*\|$/u.test(stripped)) {
+      flush();
+      continue;
+    }
+    if (/^(?: {4}|\t)/u.test(line)) {
       flush();
       continue;
     }
@@ -116,6 +137,7 @@ function recommendationFor(params: {
 }): Recommendation {
   if (isHighRisk(params.risks)) return "keep_explicit";
   if (params.repeats < params.minRepeats) return "do_not_alias";
+  if (params.repeats > 1) return "remove_duplicate";
   if (params.breakeven === null) return "do_not_alias";
   if (params.savedTokens <= 0) return "do_not_alias";
   if (params.repeats < params.breakeven) return "below_breakeven";
@@ -168,6 +190,7 @@ export async function auditRules(paths: string[], options: AuditOptions = {}): P
     const originalTokens = rawTokens * repeats;
     const compressedTokens = legendTokens + aliasTokens * repeats;
     const savedTokens = originalTokens - compressedTokens;
+    const duplicateSavedTokens = rawTokens * (repeats - 1);
     const breakeven = computeBreakeven(rawTokens, aliasTokens, legendTokens);
     const risks = classifyRisks(text);
     const recommendation = recommendationFor({ repeats, savedTokens, breakeven, risks, minRepeats });
@@ -183,6 +206,7 @@ export async function auditRules(paths: string[], options: AuditOptions = {}): P
       originalTokens,
       compressedTokens,
       savedTokens,
+      duplicateSavedTokens,
       breakeven,
       risks,
       recommendation,

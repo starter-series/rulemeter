@@ -19,7 +19,9 @@
     "build": "tsc && node scripts/mark-bin-executable.mjs",
     "test": "npm run build && node --test test/*.test.js",
     "dogfood": "npm run build && node dist/cli.js audit fixtures/AGENTS.md fixtures/CLAUDE.md fixtures/task.txt",
-    "pack:check": "npm run build && node scripts/check-pack.mjs"
+    "pack:check": "npm run build && node scripts/check-pack.mjs",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm test && npm run dogfood && npm run pack:check && npm audit --audit-level=high"
   },
   "keywords": [
     "agents",
