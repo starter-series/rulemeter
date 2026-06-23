@@ -12,6 +12,9 @@ function locationsText(candidate: RuleCandidate): string {
 
 export function formatAuditTable(report: AuditReport): string {
   const lines: string[] = [`tokenizer: ${report.tokenizer}`];
+  for (const warning of report.warnings) {
+    lines.push(`warning: ${warning.code} - ${warning.message}`);
+  }
   if (report.candidates.length === 0) {
     lines.push("No alias candidates met the thresholds.");
     return lines.join("\n");
@@ -52,4 +55,3 @@ export function formatAuditTable(report: AuditReport): string {
   }
   return lines.join("\n");
 }
-

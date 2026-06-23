@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { classifyRisks, isHighRisk, type RiskLabel } from "./risk.js";
+import { AUDIT_SCHEMA_VERSION, type RulemeterWarning } from "./schema.js";
 import { loadTokenCounter, type TokenCounter } from "./tokenizer.js";
 
 export interface Occurrence {
@@ -35,8 +36,10 @@ export interface AuditOptions {
 }
 
 export interface AuditReport {
+  schemaVersion: typeof AUDIT_SCHEMA_VERSION;
   tokenizer: string;
   files: string[];
+  warnings: RulemeterWarning[];
   candidates: RuleCandidate[];
 }
 
@@ -189,8 +192,10 @@ export async function auditRules(paths: string[], options: AuditOptions = {}): P
   }
 
   return {
+    schemaVersion: AUDIT_SCHEMA_VERSION,
     tokenizer: counter.name,
     files: paths,
+    warnings: counter.name === "fallback_regex" ? [{ code: "APPROXIMATE_TOKENIZER", message: "Token counts are approximate." }] : [],
     candidates,
   };
 }

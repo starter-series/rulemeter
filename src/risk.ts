@@ -29,7 +29,8 @@ export const riskRules: RiskRule[] = [
       /\bpublic identity\b/i,
       /\bidentity\b/i,
       /\bHeznpc\b/i,
-      /\bauthor\b/i,
+      /\bcommit author\b/i,
+      /\bsole author\b/i,
       /\bCo-Authored-By\b/i,
       /\bexternal surface\b/i,
       /정체성|실명|공개\s*이름|작성자/u,
@@ -41,7 +42,7 @@ export const riskRules: RiskRule[] = [
       /\bPII\b/i,
       /\bemail\b/i,
       /\bAPI key\b/i,
-      /\btoken\b/i,
+      /\b(?:api|access|auth|bearer|secret)\s+token\b/i,
       /\baccount identifier\b/i,
       /\breference number\b/i,
       /개인정보|이메일|계정|토큰|키|식별자/u,
@@ -68,10 +69,11 @@ export const riskRules: RiskRule[] = [
     patterns: [
       /\bratification\b/i,
       /\bowner stated\b/i,
-      /\bstrategy\b/i,
+      /\bnew strategy\b/i,
+      /\bstrategy\s+(?:text|choice|constraint|requires|enters)\b/i,
       /\bpositioning\b/i,
       /\bKPI\b/i,
-      /\bconstraint\b/i,
+      /\bconstraint\s+text\b/i,
       /전략|포지셔닝|제약|소유자|확정/u,
     ],
   },
@@ -108,4 +110,3 @@ export function classifyRisks(text: string): RiskLabel[] {
 export function isHighRisk(labels: RiskLabel[]): boolean {
   return labels.some((label) => highRiskLabels.has(label));
 }
-

@@ -6,8 +6,17 @@ export interface TokenCounter {
 }
 
 export interface TokenCounterOptions {
+  allowFallback?: boolean;
   encoding?: string;
   model?: string;
+}
+
+export class TokenizerLoadError extends Error {
+  readonly code = "TOKENIZER_NOT_FOUND";
+
+  constructor(readonly option: "encoding" | "model", readonly value: string) {
+    super(`unknown ${option}: ${value}`);
+  }
 }
 
 export class RegexTokenCounter implements TokenCounter {
@@ -49,10 +58,16 @@ function fromModel(model: string): TokenCounter | null {
 
 export function loadTokenCounter(options: TokenCounterOptions = {}): TokenCounter {
   if (options.encoding) {
-    return fromEncoding(options.encoding) ?? new RegexTokenCounter();
+    const counter = fromEncoding(options.encoding);
+    if (counter) return counter;
+    if (options.allowFallback) return new RegexTokenCounter();
+    throw new TokenizerLoadError("encoding", options.encoding);
   }
   if (options.model) {
-    return fromModel(options.model) ?? new RegexTokenCounter();
+    const counter = fromModel(options.model);
+    if (counter) return counter;
+    if (options.allowFallback) return new RegexTokenCounter();
+    throw new TokenizerLoadError("model", options.model);
   }
   return fromEncoding("o200k_base") ?? fromEncoding("cl100k_base") ?? new RegexTokenCounter();
 }

@@ -3,7 +3,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { auditRules, computeBreakeven, RegexTokenCounter } from "../dist/index.js";
+import { auditRules, classifyRisks, computeBreakeven, RegexTokenCounter } from "../dist/index.js";
 
 async function tempFile(name, content) {
   const dir = await mkdtemp(join(tmpdir(), "rulemeter-test-"));
@@ -26,9 +26,15 @@ test("repeated low-risk rule is a candidate", async () => {
     ].join("\n"),
   );
   const report = await auditRules([path], { counter: new RegexTokenCounter(), minTokens: 5 });
+  assert.equal(report.schemaVersion, "rulemeter.audit.v1");
   assert.equal(report.candidates.length, 1);
   assert.equal(report.candidates[0].recommendation, "candidate");
   assert.ok(report.candidates[0].savedTokens > 0);
+});
+
+test("generic authoring and strategy words do not trigger high-risk labels alone", () => {
+  const labels = classifyRisks("Use a clear authoring strategy for small helper functions.");
+  assert.deepEqual(labels, []);
 });
 
 test("identity and PII rules stay explicit", async () => {
@@ -63,4 +69,3 @@ test("each high-risk family stays explicit", async () => {
     assert.ok(report.candidates[0].risks.includes(label), label);
   }
 });
-

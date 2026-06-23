@@ -1,7 +1,7 @@
 {
   "name": "@starter-series/rulemeter",
   "version": "0.1.0",
-  "description": "Audit agent instruction files for rule alias break-even, cache hints, and high-risk compression.",
+  "description": "Measure agent rule alias break-even and high-risk compression risk.",
   "type": "module",
   "bin": {
     "rulemeter": "dist/cli.js"
@@ -19,7 +19,7 @@
     "build": "tsc && node scripts/mark-bin-executable.mjs",
     "test": "npm run build && node --test test/*.test.js",
     "dogfood": "npm run build && node dist/cli.js audit fixtures/AGENTS.md fixtures/CLAUDE.md fixtures/task.txt",
-    "pack:check": "npm run build && npm pack --dry-run --json"
+    "pack:check": "npm run build && node scripts/check-pack.mjs"
   },
   "keywords": [
     "agents",
