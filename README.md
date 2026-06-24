@@ -40,6 +40,7 @@ rulemeter audit --preset all
 rulemeter audit --preset claude --list-files
 rulemeter audit --preset all --format markdown
 rulemeter audit --preset all --fail-on duplicate
+rulemeter audit --preset all --experimental-similar --format markdown
 rulemeter audit AGENTS.md --json --encoding cl100k_base
 rulemeter audit AGENTS.md --config rulemeter.config.json
 rulemeter count "RULE_01 = preserve existing module boundaries" --encoding o200k_base
@@ -88,6 +89,7 @@ Use `--fail-on` to make CI fail after printing the normal report:
 rulemeter audit --preset all --fail-on duplicate
 rulemeter audit --preset all --fail-on risk
 rulemeter audit --preset all --fail-on candidate
+rulemeter audit --preset all --experimental-similar --fail-on similar
 ```
 
 | Gate | Fails when |
@@ -95,8 +97,18 @@ rulemeter audit --preset all --fail-on candidate
 | `duplicate` | At least one candidate recommends `remove_duplicate`. |
 | `risk` | At least one candidate has a high-risk label. |
 | `candidate` | At least one candidate recommends `candidate`. |
+| `similar` | At least one experimental similar-rule candidate was found. |
 
 If preset discovery finds no files, `--list-files` returns an empty list with exit code 0, while a real audit exits with `NO_FILES_FOUND`.
+
+Experimental near-duplicate detection is opt-in:
+
+```bash
+rulemeter audit --preset all --experimental-similar
+rulemeter audit --preset all --experimental-similar --similarity-threshold 0.8
+```
+
+The default similarity threshold is `0.65`. `similarCandidates` are additive JSON fields under `rulemeter.audit.v1`. They are review prompts, not automatic dedupe or alias recommendations.
 
 ## Presets
 
@@ -159,7 +171,8 @@ These default to `keep_explicit` because preserving critical instructions is mor
 
 ## Limits
 
-- RuleMeter only groups exact normalized duplicate text. It does not detect semantically similar rules yet.
+- RuleMeter's default recommendations only group exact normalized duplicate text.
+- Experimental similar-rule detection uses lexical overlap and is off by default. Treat `similarCandidates` as review prompts, not proof of semantic equivalence.
 - Token counts use OpenAI tokenizers by default, so non-OpenAI agent files should treat numbers as approximations.
 - Stable prefix files such as `AGENTS.md` and `CLAUDE.md` may be cached by their host tools, so token savings can be less valuable than dynamic prompt savings.
 - Markdown code fences, tables, blockquotes, and indented code are skipped; RuleMeter focuses on prose/list instruction text.

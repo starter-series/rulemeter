@@ -104,6 +104,25 @@ test("auditDocuments audits in-memory service inputs", async () => {
   assert.equal(report.candidates[0].occurrences[0].path, "memory://rules");
 });
 
+test("experimental similar candidates find near duplicate rules", async () => {
+  const report = await auditDocuments(
+    [
+      {
+        id: "memory://rules",
+        text: [
+          "- Preserve existing module boundaries and keep edits narrowly scoped to requested behavior.",
+          "- Keep edits narrowly scoped to requested behavior while preserving existing module boundaries.",
+        ].join("\n"),
+      },
+    ],
+    { counter: new RegexTokenCounter(), includeSimilar: true, minTokens: 5 },
+  );
+  assert.equal(report.candidates.length, 0);
+  assert.equal(report.similarCandidates.length, 1);
+  assert.equal(report.similarCandidates[0].recommendation, "review_similar");
+  assert.ok(report.similarCandidates[0].similarity >= 0.5);
+});
+
 test("identity and PII rules stay explicit", async () => {
   const path = await tempFile(
     "AGENTS.md",

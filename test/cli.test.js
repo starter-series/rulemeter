@@ -72,6 +72,61 @@ test("CLI fail-on duplicate exits non-zero after printing report", async () => {
   );
 });
 
+test("CLI experimental similar emits Markdown and fail-on similar", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "rulemeter-similar-test-"));
+  const path = join(dir, "AGENTS.md");
+  await writeFile(
+    path,
+    [
+      "- Preserve existing module boundaries and keep edits narrowly scoped to requested behavior.",
+      "- Keep edits narrowly scoped to requested behavior while preserving existing module boundaries.",
+    ].join("\n"),
+    "utf8",
+  );
+
+  const { stdout } = await execFileAsync(
+    process.execPath,
+    [
+      "dist/cli.js",
+      "audit",
+      path,
+      "--experimental-similar",
+      "--format",
+      "markdown",
+      "--min-tokens",
+      "5",
+    ],
+    { cwd: process.cwd() },
+  );
+  assert.match(stdout, /Similar Rule Candidates/);
+  assert.match(stdout, /`SIM_01`/);
+
+  await assert.rejects(
+    execFileAsync(
+      process.execPath,
+      [
+        "dist/cli.js",
+        "audit",
+        path,
+        "--experimental-similar",
+        "--fail-on",
+        "similar",
+        "--json",
+        "--min-tokens",
+        "5",
+      ],
+      { cwd: process.cwd() },
+    ),
+    (error) => {
+      const payload = JSON.parse(error.stdout);
+      assert.equal(error.code, 1);
+      assert.equal(payload.similarCandidates.length, 1);
+      assert.match(error.stderr, /--fail-on similar matched/);
+      return true;
+    },
+  );
+});
+
 test("CLI count reports tokens", async () => {
   const { stdout } = await execFileAsync(
     process.execPath,

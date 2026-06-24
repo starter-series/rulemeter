@@ -29,11 +29,26 @@ export interface RuleCandidate {
   cacheHint: "stable_prefix_candidate" | "dynamic_task_or_local_context";
 }
 
+export type SimilarRecommendation = "review_similar" | "keep_explicit";
+
+export interface SimilarRuleCandidate {
+  rule: string;
+  texts: string[];
+  repeats: number;
+  occurrences: Occurrence[];
+  similarity: number;
+  risks: RiskLabel[];
+  recommendation: SimilarRecommendation;
+  cacheHint: "stable_prefix_candidate" | "dynamic_task_or_local_context";
+}
+
 export interface AuditOptions {
   minTokens?: number;
   minRepeats?: number;
   aliasPrefix?: string;
   counter?: TokenCounter;
+  includeSimilar?: boolean;
+  similarityThreshold?: number;
 }
 
 export interface AuditDocument {
@@ -50,11 +65,18 @@ export interface AuditReport {
   files: string[];
   warnings: RulemeterWarning[];
   candidates: RuleCandidate[];
+  similarCandidates: SimilarRuleCandidate[];
 }
 
 interface Segment {
   text: string;
   line: number;
+}
+
+interface SegmentGroup {
+  text: string;
+  occurrences: Occurrence[];
+  rawTokens: number;
 }
 
 export function normalizeSegment(text: string): string {
@@ -153,6 +175,10 @@ function cacheHintFor(occurrences: Occurrence[]): RuleCandidate["cacheHint"] {
   return "dynamic_task_or_local_context";
 }
 
+function uniqueRisks(risks: RiskLabel[]): RiskLabel[] {
+  return [...new Set(risks)].sort((left, right) => left.localeCompare(right)) as RiskLabel[];
+}
+
 function recommendationFor(params: {
   repeats: number;
   savedTokens: number;
@@ -179,10 +205,60 @@ function nextAvailableAlias(prefix: string, index: number, corpus: string): stri
   return candidate;
 }
 
+function wordSet(text: string): Set<string> {
+  const words = text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  return new Set(words.filter((word) => word.length >= 3));
+}
+
+function jaccard(left: Set<string>, right: Set<string>): number {
+  if (left.size === 0 || right.size === 0) return 0;
+  let intersection = 0;
+  for (const word of left) {
+    if (right.has(word)) intersection += 1;
+  }
+  const union = left.size + right.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+function findSimilarCandidates(groups: SegmentGroup[], threshold: number): SimilarRuleCandidate[] {
+  const eligible = groups
+    .filter((group) => group.occurrences.length === 1)
+    .map((group) => ({ ...group, words: wordSet(group.text) }));
+  const candidates: SimilarRuleCandidate[] = [];
+
+  for (let leftIndex = 0; leftIndex < eligible.length; leftIndex += 1) {
+    const left = eligible[leftIndex];
+    if (!left) continue;
+    for (let rightIndex = leftIndex + 1; rightIndex < eligible.length; rightIndex += 1) {
+      const right = eligible[rightIndex];
+      if (!right) continue;
+      if (left.text === right.text) continue;
+      const similarity = jaccard(left.words, right.words);
+      if (similarity < threshold) continue;
+      const occurrences = [...left.occurrences, ...right.occurrences];
+      const risks = uniqueRisks([...classifyRisks(left.text), ...classifyRisks(right.text)]);
+      candidates.push({
+        rule: `SIM_${String(candidates.length + 1).padStart(2, "0")}`,
+        texts: [left.text, right.text],
+        repeats: occurrences.length,
+        occurrences,
+        similarity: Number(similarity.toFixed(3)),
+        risks,
+        recommendation: isHighRisk(risks) ? "keep_explicit" : "review_similar",
+        cacheHint: cacheHintFor(occurrences),
+      });
+    }
+  }
+
+  return candidates.sort((left, right) => right.similarity - left.similarity || left.texts[0].localeCompare(right.texts[0]));
+}
+
 export async function auditDocuments(documents: AuditDocument[], options: AuditOptions = {}): Promise<AuditReport> {
   const minTokens = options.minTokens ?? 12;
   const minRepeats = options.minRepeats ?? 2;
   const aliasPrefix = options.aliasPrefix ?? "RULE";
+  const includeSimilar = options.includeSimilar ?? false;
+  const similarityThreshold = options.similarityThreshold ?? 0.65;
   const counter = options.counter ?? loadTokenCounter();
 
   const corpus = documents.map((document) => document.text).join("\n");
@@ -202,10 +278,10 @@ export async function auditDocuments(documents: AuditDocument[], options: AuditO
     if (leftOccurrences.length !== rightOccurrences.length) return rightOccurrences.length - leftOccurrences.length;
     return leftText.localeCompare(rightText);
   });
+  const segmentGroups: SegmentGroup[] = entries.map(([text, occurrences]) => ({ text, occurrences, rawTokens: counter.count(text) }));
 
-  for (const [text, occurrences] of entries) {
+  for (const { text, occurrences, rawTokens } of segmentGroups) {
     const repeats = occurrences.length;
-    const rawTokens = counter.count(text);
     if (rawTokens < minTokens || repeats < minRepeats) continue;
 
     const alias = nextAvailableAlias(aliasPrefix, index, corpus);
@@ -245,6 +321,12 @@ export async function auditDocuments(documents: AuditDocument[], options: AuditO
     files: documents.map((document) => document.id),
     warnings: counter.name === "fallback_regex" ? [{ code: "APPROXIMATE_TOKENIZER", message: "Token counts are approximate." }] : [],
     candidates,
+    similarCandidates: includeSimilar
+      ? findSimilarCandidates(
+          segmentGroups.filter((group) => group.rawTokens >= minTokens),
+          similarityThreshold,
+        )
+      : [],
   };
 }
 
