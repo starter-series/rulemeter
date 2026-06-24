@@ -3,7 +3,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { auditRules, classifyRisks, computeBreakeven, RegexTokenCounter } from "../dist/index.js";
+import { auditDocuments, auditRules, classifyRisks, computeBreakeven, RegexTokenCounter } from "../dist/index.js";
 
 async function tempFile(name, content) {
   const dir = await mkdtemp(join(tmpdir(), "rulemeter-test-"));
@@ -71,6 +71,37 @@ test("markdown code fences tables and blockquotes are skipped", async () => {
   const report = await auditRules([path], { counter: new RegexTokenCounter(), minTokens: 5 });
   assert.equal(report.candidates.length, 1);
   assert.equal(report.candidates[0].text, "Preserve the existing module boundaries and keep edits narrowly scoped to the requested behavior.");
+});
+
+test("wrapped list items stay one segment", async () => {
+  const path = await tempFile(
+    "AGENTS.md",
+    [
+      "- Preserve the existing module boundaries and keep edits narrowly scoped",
+      "  to the requested behavior across touched files.",
+      "- Preserve the existing module boundaries and keep edits narrowly scoped",
+      "  to the requested behavior across touched files.",
+    ].join("\n"),
+  );
+  const report = await auditRules([path], { counter: new RegexTokenCounter(), minTokens: 5 });
+  assert.equal(report.candidates.length, 1);
+  assert.equal(
+    report.candidates[0].text,
+    "Preserve the existing module boundaries and keep edits narrowly scoped to the requested behavior across touched files.",
+  );
+  assert.equal(report.candidates[0].occurrences[0].line, 1);
+  assert.equal(report.candidates[0].occurrences[1].line, 3);
+});
+
+test("auditDocuments audits in-memory service inputs", async () => {
+  const text = [
+    "- Keep generated reports read-only and never rewrite user instruction files.",
+    "- Keep generated reports read-only and never rewrite user instruction files.",
+  ].join("\n");
+  const report = await auditDocuments([{ id: "memory://rules", text }], { counter: new RegexTokenCounter(), minTokens: 5 });
+  assert.deepEqual(report.files, ["memory://rules"]);
+  assert.equal(report.candidates.length, 1);
+  assert.equal(report.candidates[0].occurrences[0].path, "memory://rules");
 });
 
 test("identity and PII rules stay explicit", async () => {

@@ -36,6 +36,11 @@ export interface AuditOptions {
   counter?: TokenCounter;
 }
 
+export interface AuditDocument {
+  id: string;
+  text: string;
+}
+
 export interface AuditReport {
   schemaVersion: typeof AUDIT_SCHEMA_VERSION;
   configPath?: string | null;
@@ -63,13 +68,25 @@ export function extractSegments(source: string): Segment[] {
   const segments: Segment[] = [];
   let paragraph: string[] = [];
   let paragraphStart = 1;
+  let listItem: string[] = [];
+  let listItemStart = 1;
   let inFence = false;
 
-  const flush = (): void => {
+  const flushParagraph = (): void => {
     if (paragraph.length === 0) return;
     const text = normalizeSegment(paragraph.join(" "));
     if (text.length > 0) segments.push({ text, line: paragraphStart });
     paragraph = [];
+  };
+  const flushListItem = (): void => {
+    if (listItem.length === 0) return;
+    const text = normalizeSegment(listItem.join(" "));
+    if (text.length > 0) segments.push({ text, line: listItemStart });
+    listItem = [];
+  };
+  const flush = (): void => {
+    flushParagraph();
+    flushListItem();
   };
 
   const lines = source.split(/\r?\n/u);
@@ -77,6 +94,7 @@ export function extractSegments(source: string): Segment[] {
     const lineNumber = index + 1;
     const line = lines[index] ?? "";
     const stripped = line.trim();
+    const isListMarker = /^\s{0,4}(?:[-*+]|\d+[.)])\s+/u.test(line);
 
     if (/^(```|~~~)/u.test(stripped)) {
       flush();
@@ -101,14 +119,18 @@ export function extractSegments(source: string): Segment[] {
       flush();
       continue;
     }
-    if (/^(?: {4}|\t)/u.test(line)) {
+    if (/^(?: {4}|\t)/u.test(line) && listItem.length === 0) {
       flush();
       continue;
     }
-    if (/^\s{0,4}(?:[-*+]|\d+[.)])\s+/u.test(line)) {
+    if (isListMarker) {
       flush();
-      const text = normalizeSegment(line);
-      if (text.length > 0) segments.push({ text, line: lineNumber });
+      listItemStart = lineNumber;
+      listItem = [line];
+      continue;
+    }
+    if (listItem.length > 0) {
+      listItem.push(stripped);
       continue;
     }
     if (paragraph.length === 0) paragraphStart = lineNumber;
@@ -157,20 +179,19 @@ function nextAvailableAlias(prefix: string, index: number, corpus: string): stri
   return candidate;
 }
 
-export async function auditRules(paths: string[], options: AuditOptions = {}): Promise<AuditReport> {
+export async function auditDocuments(documents: AuditDocument[], options: AuditOptions = {}): Promise<AuditReport> {
   const minTokens = options.minTokens ?? 12;
   const minRepeats = options.minRepeats ?? 2;
   const aliasPrefix = options.aliasPrefix ?? "RULE";
   const counter = options.counter ?? loadTokenCounter();
 
-  const fileTexts = await Promise.all(paths.map(async (path) => ({ path, text: await readFile(path, "utf8") })));
-  const corpus = fileTexts.map((file) => file.text).join("\n");
+  const corpus = documents.map((document) => document.text).join("\n");
   const grouped = new Map<string, Occurrence[]>();
 
-  for (const file of fileTexts) {
-    for (const segment of extractSegments(file.text)) {
+  for (const document of documents) {
+    for (const segment of extractSegments(document.text)) {
       const occurrences = grouped.get(segment.text) ?? [];
-      occurrences.push({ path: file.path, line: segment.line });
+      occurrences.push({ path: document.id, line: segment.line });
       grouped.set(segment.text, occurrences);
     }
   }
@@ -221,8 +242,13 @@ export async function auditRules(paths: string[], options: AuditOptions = {}): P
   return {
     schemaVersion: AUDIT_SCHEMA_VERSION,
     tokenizer: counter.name,
-    files: paths,
+    files: documents.map((document) => document.id),
     warnings: counter.name === "fallback_regex" ? [{ code: "APPROXIMATE_TOKENIZER", message: "Token counts are approximate." }] : [],
     candidates,
   };
+}
+
+export async function auditRules(paths: string[], options: AuditOptions = {}): Promise<AuditReport> {
+  const documents = await Promise.all(paths.map(async (path) => ({ id: path, text: await readFile(path, "utf8") })));
+  return auditDocuments(documents, options);
 }

@@ -1,7 +1,7 @@
 {
   "name": "rulemeter",
   "version": "0.1.0",
-  "description": "Measure agent rule alias break-even and high-risk compression risk.",
+  "description": "Audit duplicated agent rules, token cost, and risky instruction compression.",
   "type": "module",
   "bin": {
     "rulemeter": "dist/cli.js"

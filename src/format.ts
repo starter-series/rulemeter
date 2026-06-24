@@ -10,6 +10,10 @@ function locationsText(candidate: RuleCandidate): string {
   return first.join(", ");
 }
 
+function escapeMarkdown(value: string): string {
+  return value.replace(/\|/gu, "\\|").replace(/\n/gu, " ");
+}
+
 export function formatAuditTable(report: AuditReport): string {
   const lines: string[] = [`tokenizer: ${report.tokenizer}`];
   if (report.configPath) lines.push(`config: ${report.configPath}`);
@@ -59,6 +63,45 @@ export function formatAuditTable(report: AuditReport): string {
   lines.push(widths.map((width) => "-".repeat(width)).join("  "));
   for (const row of rows) {
     lines.push(row.map((value, index) => value.padEnd(widths[index] ?? value.length)).join("  "));
+  }
+  return lines.join("\n");
+}
+
+export function formatAuditMarkdown(report: AuditReport): string {
+  const lines: string[] = ["# RuleMeter Report", ""];
+  lines.push(`- tokenizer: \`${report.tokenizer}\``);
+  if (report.configPath) lines.push(`- config: \`${report.configPath}\``);
+  if (report.preset) lines.push(`- preset: \`${report.preset}\``);
+  lines.push(`- files: ${report.files.length}`);
+  lines.push(`- candidates: ${report.candidates.length}`);
+  if (report.discoveredFiles && report.discoveredFiles.length > 0) {
+    lines.push(`- discovered files: ${report.discoveredFiles.map((file) => `\`${file}\``).join(", ")}`);
+  }
+  for (const warning of report.warnings) {
+    lines.push(`- warning: \`${warning.code}\` ${warning.message}`);
+  }
+  lines.push("");
+
+  if (report.candidates.length === 0) {
+    lines.push("No duplicate or risk candidates met the thresholds.");
+    return lines.join("\n");
+  }
+
+  lines.push("| Rule | Recommendation | Risk | Repeats | Saved | Dedupe saved | Locations | Text |");
+  lines.push("|---|---|---|---:|---:|---:|---|---|");
+  for (const candidate of report.candidates) {
+    lines.push(
+      `| ${[
+        `\`${escapeMarkdown(candidate.rule)}\``,
+        `\`${escapeMarkdown(candidate.recommendation)}\``,
+        escapeMarkdown(riskText(candidate)),
+        String(candidate.repeats),
+        String(candidate.savedTokens),
+        String(candidate.duplicateSavedTokens),
+        escapeMarkdown(locationsText(candidate)),
+        escapeMarkdown(candidate.text),
+      ].join(" | ")} |`,
+    );
   }
   return lines.join("\n");
 }

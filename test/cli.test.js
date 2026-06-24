@@ -39,6 +39,39 @@ test("CLI audit emits JSON", async () => {
   assert.equal(payload.candidates[0].recommendation, "remove_duplicate");
 });
 
+test("CLI audit emits Markdown report", async () => {
+  const path = await fixture();
+  const { stdout } = await execFileAsync(
+    process.execPath,
+    ["dist/cli.js", "audit", path, "--format", "markdown", "--encoding", "cl100k_base", "--min-tokens", "5"],
+    {
+      cwd: process.cwd(),
+    },
+  );
+  assert.match(stdout, /^# RuleMeter Report/m);
+  assert.match(stdout, /\| Rule \| Recommendation \| Risk \|/);
+  assert.match(stdout, /\| `RULE_01` \| `remove_duplicate` \|/);
+});
+
+test("CLI fail-on duplicate exits non-zero after printing report", async () => {
+  const path = await fixture();
+  await assert.rejects(
+    execFileAsync(
+      process.execPath,
+      ["dist/cli.js", "audit", path, "--json", "--encoding", "cl100k_base", "--min-tokens", "5", "--fail-on", "duplicate"],
+      { cwd: process.cwd() },
+    ),
+    (error) => {
+      const payload = JSON.parse(error.stdout);
+      assert.equal(error.code, 1);
+      assert.equal(payload.schemaVersion, "rulemeter.audit.v1");
+      assert.equal(payload.candidates[0].recommendation, "remove_duplicate");
+      assert.match(error.stderr, /--fail-on duplicate matched/);
+      return true;
+    },
+  );
+});
+
 test("CLI count reports tokens", async () => {
   const { stdout } = await execFileAsync(
     process.execPath,
@@ -124,6 +157,75 @@ test("CLI audit reads config file", async () => {
   assert.equal(payload.tokenizer, "cl100k_base");
   assert.match(payload.candidates[0].rule, /^RM_/);
   assert.equal(payload.candidates[0].recommendation, "remove_duplicate");
+});
+
+test("CLI reports typed missing file errors", async () => {
+  await assert.rejects(
+    execFileAsync(process.execPath, ["dist/cli.js", "audit", "missing.md", "--json"], {
+      cwd: process.cwd(),
+    }),
+    (error) => {
+      const payload = JSON.parse(error.stderr);
+      assert.equal(payload.schemaVersion, "rulemeter.error.v1");
+      assert.equal(payload.error.code, "FILE_NOT_FOUND");
+      return true;
+    },
+  );
+});
+
+test("CLI reports typed invalid config errors", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "rulemeter-bad-config-test-"));
+  const configPath = join(dir, "rulemeter.config.json");
+  await writeFile(configPath, "{ bad json", "utf8");
+  await assert.rejects(
+    execFileAsync(process.execPath, ["dist/cli.js", "count", "hello", "--json", "--config", configPath], {
+      cwd: process.cwd(),
+    }),
+    (error) => {
+      const payload = JSON.parse(error.stderr);
+      assert.equal(payload.schemaVersion, "rulemeter.error.v1");
+      assert.equal(payload.error.code, "CONFIG_INVALID_JSON");
+      return true;
+    },
+  );
+});
+
+test("CLI validates alias prefix before building regexes", async () => {
+  const path = await fixture();
+  await assert.rejects(
+    execFileAsync(process.execPath, ["dist/cli.js", "audit", path, "--json", "--alias-prefix", "R["], {
+      cwd: process.cwd(),
+    }),
+    (error) => {
+      const payload = JSON.parse(error.stderr);
+      assert.equal(payload.schemaVersion, "rulemeter.error.v1");
+      assert.equal(payload.error.code, "INVALID_ALIAS_PREFIX");
+      return true;
+    },
+  );
+});
+
+test("CLI empty preset list-files is allowed but audit reports NO_FILES_FOUND", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "rulemeter-empty-preset-test-"));
+  const list = await execFileAsync(process.execPath, [cliPath, "audit", "--preset", "all", "--list-files", "--json"], {
+    cwd: dir,
+  });
+  const discovery = JSON.parse(list.stdout);
+  assert.equal(discovery.schemaVersion, "rulemeter.discovery.v1");
+  assert.deepEqual(discovery.files, []);
+
+  await assert.rejects(
+    execFileAsync(process.execPath, [cliPath, "audit", "--preset", "all", "--json"], {
+      cwd: dir,
+    }),
+    (error) => {
+      const payload = JSON.parse(error.stderr);
+      assert.equal(payload.schemaVersion, "rulemeter.error.v1");
+      assert.equal(payload.error.code, "NO_FILES_FOUND");
+      assert.match(payload.error.message, /Run from a repo root/);
+      return true;
+    },
+  );
 });
 
 test("CLI preset discovers Codex instruction files", async () => {
