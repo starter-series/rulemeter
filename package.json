@@ -1,5 +1,5 @@
 {
-  "name": "@starter-series/rulemeter",
+  "name": "rulemeter",
   "version": "0.1.0",
   "description": "Measure agent rule alias break-even and high-risk compression risk.",
   "type": "module",
@@ -15,9 +15,6 @@
     "README.md",
     "LICENSE"
   ],
-  "publishConfig": {
-    "access": "public"
-  },
   "scripts": {
     "build": "tsc && node scripts/mark-bin-executable.mjs",
     "test": "npm run build && node --test test/*.test.js",
@@ -31,8 +28,7 @@
     "prompt",
     "audit",
     "tokens",
-    "cli",
-    "starter-series"
+    "cli"
   ],
   "author": "heznpc",
   "license": "MIT",
