@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="RuleMeter">
+  <rect width="64" height="64" rx="14" fill="#171a1f" />
+  <path d="M18 42V18h13.5c5.6 0 9.3 3.4 9.3 8.4 0 3.5-1.8 6.2-4.8 7.5L43 42h-6.8l-6.1-7.3h-6.2V42H18Zm5.9-12.4h7.1c2.4 0 3.9-1.3 3.9-3.2 0-2-1.5-3.2-3.9-3.2h-7.1v6.4Z" fill="#f7f7f4" />
+  <path d="M44 22h4v20h-4V22Zm5.8 0H54v20h-4.2V22Z" fill="#6bb59d" />
+</svg>
