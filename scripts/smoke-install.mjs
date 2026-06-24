@@ -25,7 +25,7 @@ try {
   mkdirSync(consumer);
   writeFileSync(join(consumer, "package.json"), JSON.stringify({ private: true, type: "module" }, null, 2));
 
-  run("npm", ["install", tarballPath], { cwd: consumer, stdio: "inherit" });
+  run("npm", ["install", "--ignore-scripts", tarballPath], { cwd: consumer, stdio: "inherit" });
 
   const version = run("npx", ["rulemeter", "--version"], { cwd: consumer }).trim();
   if (version !== `${pack.name} ${pack.version}`) {
