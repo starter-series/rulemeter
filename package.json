@@ -15,6 +15,9 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc && node scripts/mark-bin-executable.mjs",
     "test": "npm run build && node --test test/*.test.js",
