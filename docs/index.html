@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RuleMeter</title>
+    <meta
+      name="description"
+      content="RuleMeter audits repeated agent instructions, token break-even, and high-risk rules that should stay explicit."
+    />
+    <meta property="og:title" content="RuleMeter" />
+    <meta
+      property="og:description"
+      content="A report-only CLI for measuring repeated agent rules before token-saving pressure blurs critical instructions."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://starter-series.github.io/rulemeter/" />
+    <link rel="canonical" href="https://starter-series.github.io/rulemeter/" />
+    <link rel="alternate" hreflang="en" href="https://starter-series.github.io/rulemeter/?lang=en" />
+    <link rel="alternate" hreflang="ko" href="https://starter-series.github.io/rulemeter/?lang=ko" />
+    <link rel="alternate" hreflang="ja" href="https://starter-series.github.io/rulemeter/?lang=ja" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="RuleMeter home">
+        <span class="brand-mark" aria-hidden="true">RM</span>
+        <span>RuleMeter</span>
+      </a>
+      <nav class="nav" aria-label="Primary">
+        <a href="#workflow" data-i18n="nav.workflow">Workflow</a>
+        <a href="#signals" data-i18n="nav.signals">Signals</a>
+        <a href="#install" data-i18n="nav.install">Install</a>
+      </nav>
+      <div class="language-switcher" aria-label="Language">
+        <button type="button" data-lang="en" aria-pressed="true">EN</button>
+        <button type="button" data-lang="ko" aria-pressed="false">KO</button>
+        <button type="button" data-lang="ja" aria-pressed="false">JA</button>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-copy">
+          <h1 data-i18n="hero.title">Audit repeated agent rules before compression gets risky.</h1>
+          <p data-i18n="hero.body">
+            RuleMeter is a report-only CLI for checking duplicated instruction text, alias break-even, token cost,
+            cache-prefix suitability, and high-risk rules that should stay explicit.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="https://github.com/starter-series/rulemeter" data-i18n="hero.primary">View on GitHub</a>
+            <a class="button secondary" href="#install" data-i18n="hero.secondary">Try locally</a>
+          </div>
+        </div>
+        <div class="terminal-card" aria-label="RuleMeter sample report">
+          <div class="terminal-top">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <pre><code>rulemeter audit --preset all --format markdown
+
+files: 15
+candidates: 4
+similar candidates: 7
+
+RULE_01 remove_duplicate low
+RULE_03 keep_explicit test_required</code></pre>
+        </div>
+      </section>
+
+      <section id="workflow" class="section">
+        <div>
+          <h2 data-i18n="workflow.title">Report first, rewrite never.</h2>
+          <p data-i18n="workflow.body">
+            RuleMeter does not edit files. It gives maintainers evidence for what is duplicated, what can be removed,
+            and what should remain explicit because it protects identity, approvals, tests, logs, or security.
+          </p>
+        </div>
+        <ol class="steps">
+          <li>
+            <span>01</span>
+            <strong data-i18n="workflow.step1.title">Discover instruction files</strong>
+            <p data-i18n="workflow.step1.body">Use presets for Codex, Claude, Copilot, Antigravity, or all known agent surfaces.</p>
+          </li>
+          <li>
+            <span>02</span>
+            <strong data-i18n="workflow.step2.title">Measure token economics</strong>
+            <p data-i18n="workflow.step2.body">Compare raw text, alias cost, legend cost, break-even, and duplicate deletion savings.</p>
+          </li>
+          <li>
+            <span>03</span>
+            <strong data-i18n="workflow.step3.title">Keep risky rules explicit</strong>
+            <p data-i18n="workflow.step3.body">Flag sensitive instruction families so safety-critical rules are not compressed away.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section id="signals" class="section compact">
+        <h2 data-i18n="signals.title">What the report separates</h2>
+        <div class="signal-grid">
+          <article>
+            <h3 data-i18n="signals.duplicates.title">Exact duplicates</h3>
+            <p data-i18n="signals.duplicates.body">Shows when deleting repeated text beats introducing an alias.</p>
+          </article>
+          <article>
+            <h3 data-i18n="signals.risk.title">High-risk rules</h3>
+            <p data-i18n="signals.risk.body">Keeps identity, PII, approval, test, log, and security rules visible.</p>
+          </article>
+          <article>
+            <h3 data-i18n="signals.similar.title">Similar candidates</h3>
+            <p data-i18n="signals.similar.body">Optional lexical-overlap review prompts, never automatic semantic dedupe.</p>
+          </article>
+          <article>
+            <h3 data-i18n="signals.ci.title">CI gates</h3>
+            <p data-i18n="signals.ci.body">Fail on duplicates, risks, candidates, or experimental similar-rule findings.</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="install" class="section install">
+        <div>
+          <h2 data-i18n="install.title">Use it before publishing pressure.</h2>
+          <p data-i18n="install.body">
+            The current release path is npm-deferred: clone, pack, install-smoke, and run audits locally while the package surface stays publish-ready.
+          </p>
+        </div>
+        <pre><code>git clone https://github.com/starter-series/rulemeter.git
+cd rulemeter
+npm install
+npm run smoke:install
+node dist/cli.js audit --preset all</code></pre>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span data-i18n="footer.status">Lab status: standalone validation before possible absorption into create-starter.</span>
+      <a href="https://github.com/starter-series/rulemeter">GitHub</a>
+    </footer>
+
+    <script src="./script.js"></script>
+  </body>
+</html>

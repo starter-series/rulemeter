@@ -2,6 +2,7 @@
   "name": "rulemeter",
   "version": "0.1.0",
   "description": "Audit duplicated agent rules, token cost, and risky instruction compression.",
+  "homepage": "https://starter-series.github.io/rulemeter/",
   "type": "module",
   "bin": {
     "rulemeter": "dist/cli.js"

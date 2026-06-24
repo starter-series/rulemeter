@@ -4,6 +4,8 @@
 
 `RuleMeter` audits agent instruction files such as `AGENTS.md`, `CLAUDE.md`, and task prompts for duplicated rules, token cost, and risky instruction compression.
 
+Website: https://starter-series.github.io/rulemeter/
+
 It helps maintainers see which repeated rules can be deduplicated, which rules should stay explicit, and whether an alias would actually pay for itself before token-saving pressure blurs critical instructions.
 
 It is not a general prompt compressor and it does not rewrite files. Its job is to measure:
