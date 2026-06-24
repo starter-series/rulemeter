@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { RulemeterError } from "./errors.js";
 
 export interface RulemeterConfig {
   aliasPrefix?: string;
@@ -18,34 +19,36 @@ export interface LoadedRulemeterConfig {
 
 function assertObject(value: unknown, path: string): asserts value is Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error(`${path} must contain a JSON object`);
+    throw new RulemeterError("CONFIG_INVALID", `${path} must contain a JSON object`);
   }
 }
 
 function optionalString(value: unknown, key: string): string | undefined {
   if (value === undefined) return undefined;
   if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(`${key} must be a non-empty string`);
+    throw new RulemeterError("CONFIG_INVALID", `${key} must be a non-empty string`);
   }
   return value;
 }
 
 function optionalBoolean(value: unknown, key: string): boolean | undefined {
   if (value === undefined) return undefined;
-  if (typeof value !== "boolean") throw new Error(`${key} must be a boolean`);
+  if (typeof value !== "boolean") throw new RulemeterError("CONFIG_INVALID", `${key} must be a boolean`);
   return value;
 }
 
 function optionalPositiveInteger(value: unknown, key: string): number | undefined {
   if (value === undefined) return undefined;
-  if (!Number.isInteger(value) || Number(value) < 1) throw new Error(`${key} must be a positive integer`);
+  if (!Number.isInteger(value) || Number(value) < 1) {
+    throw new RulemeterError("CONFIG_INVALID", `${key} must be a positive integer`);
+  }
   return Number(value);
 }
 
 export async function loadRulemeterConfigWithMeta(configPath?: string): Promise<LoadedRulemeterConfig> {
   const path = configPath ?? join(process.cwd(), "rulemeter.config.json");
   if (!existsSync(path)) {
-    if (configPath) throw new Error(`config file not found: ${path}`);
+    if (configPath) throw new RulemeterError("CONFIG_NOT_FOUND", `config file not found: ${path}`);
     return { config: {}, path: null };
   }
 
@@ -53,7 +56,10 @@ export async function loadRulemeterConfigWithMeta(configPath?: string): Promise<
   try {
     parsed = JSON.parse(await readFile(path, "utf8"));
   } catch (error) {
-    throw new Error(`failed to read config ${path}: ${error instanceof Error ? error.message : String(error)}`);
+    throw new RulemeterError(
+      "CONFIG_INVALID_JSON",
+      `failed to read config ${path}: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 
   assertObject(parsed, path);

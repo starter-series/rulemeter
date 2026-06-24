@@ -2,7 +2,8 @@
 import { existsSync, statSync } from "node:fs";
 import { auditRules } from "./audit.js";
 import { loadRulemeterConfigWithMeta, type RulemeterConfig } from "./config.js";
-import { formatAuditTable } from "./format.js";
+import { RulemeterError } from "./errors.js";
+import { formatAuditMarkdown, formatAuditTable } from "./format.js";
 import { discoverPresetFiles, presetNames } from "./presets.js";
 import { COUNT_SCHEMA_VERSION, DISCOVERY_SCHEMA_VERSION, ERROR_SCHEMA_VERSION } from "./schema.js";
 import { loadTokenCounter, TokenizerLoadError } from "./tokenizer.js";
@@ -13,7 +14,7 @@ function help(): string {
   return `rulemeter — audit agent instruction files for alias break-even and compression risk.
 
 Usage
-  rulemeter audit <file...> [--json] [--config PATH] [--preset NAME] [--list-files] [--encoding NAME] [--model NAME] [--allow-fallback] [--min-tokens N] [--min-repeats N] [--alias-prefix RULE]
+  rulemeter audit <file...> [--json] [--format table|markdown|json] [--fail-on duplicate|risk|candidate] [--config PATH] [--preset NAME] [--list-files] [--encoding NAME] [--model NAME] [--allow-fallback] [--min-tokens N] [--min-repeats N] [--alias-prefix RULE]
   rulemeter count <text> [--json] [--config PATH] [--encoding NAME] [--model NAME] [--allow-fallback]
   rulemeter --version
   rulemeter --help
@@ -21,17 +22,18 @@ Usage
 Examples
   rulemeter audit AGENTS.md CLAUDE.md task.txt
   rulemeter audit AGENTS.md --json --encoding cl100k_base
+  rulemeter audit --preset all --format markdown
+  rulemeter audit --preset all --fail-on duplicate
   rulemeter audit AGENTS.md --config rulemeter.config.json
   rulemeter audit --preset all --list-files
   rulemeter count "RULE_01 = preserve existing module boundaries" --encoding o200k_base
 `;
 }
 
-class CliError extends Error {
-  constructor(readonly code: string, message: string, readonly exitCode = 2) {
-    super(message);
-  }
-}
+class CliError extends RulemeterError {}
+
+type AuditFormat = "table" | "markdown" | "json";
+type FailOn = "duplicate" | "risk" | "candidate";
 
 function takeValue(args: string[], flag: string, fallback: string): string {
   const index = args.indexOf(flag);
@@ -68,6 +70,26 @@ function assertTokenizerChoice(encoding: string, model: string): void {
   if (encoding && model) throw new CliError("INVALID_OPTION", "--encoding and --model are mutually exclusive");
 }
 
+function assertAliasPrefix(prefix: string): void {
+  if (!/^[A-Za-z][A-Za-z0-9]*$/u.test(prefix)) {
+    throw new CliError("INVALID_ALIAS_PREFIX", "--alias-prefix must start with a letter and contain only letters or digits");
+  }
+}
+
+function parseAuditFormat(value: string, json: boolean): AuditFormat {
+  if (json && value && value !== "json") throw new CliError("INVALID_OPTION", "--json cannot be combined with --format table or --format markdown");
+  if (json) return "json";
+  if (!value) return "table";
+  if (value === "table" || value === "markdown" || value === "json") return value;
+  throw new CliError("INVALID_OPTION", "--format must be one of: table, markdown, json");
+}
+
+function parseFailOn(value: string): FailOn | null {
+  if (!value) return null;
+  if (value === "duplicate" || value === "risk" || value === "candidate") return value;
+  throw new CliError("INVALID_OPTION", "--fail-on must be one of: duplicate, risk, candidate");
+}
+
 function assertPreset(preset: string): void {
   if (preset && !(presetNames as string[]).includes(preset)) {
     throw new CliError("INVALID_OPTION", `--preset must be one of: ${presetNames.join(", ")}`);
@@ -79,11 +101,28 @@ function unique(values: string[]): string[] {
 }
 
 function assertFiles(paths: string[]): void {
-  if (paths.length === 0) throw new Error("audit requires at least one file");
   for (const path of paths) {
-    if (!existsSync(path)) throw new Error(`file not found: ${path}`);
-    if (!statSync(path).isFile()) throw new Error(`not a file: ${path}`);
+    if (!existsSync(path)) throw new CliError("FILE_NOT_FOUND", `file not found: ${path}`);
+    if (!statSync(path).isFile()) throw new CliError("NOT_A_FILE", `not a file: ${path}`);
   }
+}
+
+function assertFilesFound(paths: string[], preset: string): void {
+  if (paths.length > 0) return;
+  if (preset) {
+    throw new CliError(
+      "NO_FILES_FOUND",
+      `no files found for preset "${preset}". Run from a repo root, pass explicit files, or use --list-files to preview discovery.`,
+    );
+  }
+  throw new CliError("NO_FILES_FOUND", "audit requires at least one file");
+}
+
+function failOnMatched(report: Awaited<ReturnType<typeof auditRules>>, failOn: FailOn | null): boolean {
+  if (!failOn) return false;
+  if (failOn === "duplicate") return report.candidates.some((candidate) => candidate.recommendation === "remove_duplicate");
+  if (failOn === "risk") return report.candidates.some((candidate) => candidate.risks.length > 0);
+  return report.candidates.some((candidate) => candidate.recommendation === "candidate");
 }
 
 async function run(argv: string[]): Promise<number> {
@@ -103,6 +142,8 @@ async function run(argv: string[]): Promise<number> {
     const loadedConfig = await loadRulemeterConfigWithMeta(configPath || undefined);
     const config: RulemeterConfig = loadedConfig.config;
     const json = takeBool(args, "--json");
+    const format = parseAuditFormat(takeValue(args, "--format", ""), json);
+    const failOn = parseFailOn(takeValue(args, "--fail-on", ""));
     const listFiles = takeBool(args, "--list-files");
     const preset = takeValue(args, "--preset", "");
     assertPreset(preset);
@@ -110,13 +151,13 @@ async function run(argv: string[]): Promise<number> {
     const minTokens = positiveInteger(takeValue(args, "--min-tokens", String(config.minTokens ?? 12)), "--min-tokens");
     const minRepeats = positiveInteger(takeValue(args, "--min-repeats", String(config.minRepeats ?? 2)), "--min-repeats");
     const aliasPrefix = takeValue(args, "--alias-prefix", config.aliasPrefix ?? "RULE");
+    assertAliasPrefix(aliasPrefix);
     const encoding = mergeString(takeValue(args, "--encoding", ""), config.encoding, "");
     const model = mergeString(takeValue(args, "--model", ""), config.model, "");
     assertTokenizerChoice(encoding, model);
     assertNoUnknownFlags(args);
     const discoveredFiles = preset ? await discoverPresetFiles(preset) : [];
     const files = unique([...args, ...discoveredFiles]);
-    assertFiles(files);
 
     if (listFiles) {
       const payload = {
@@ -135,17 +176,23 @@ async function run(argv: string[]): Promise<number> {
       return 0;
     }
 
+    assertFilesFound(files, preset);
+    assertFiles(files);
     const counter = loadTokenCounter({ allowFallback, encoding: encoding || undefined, model: model || undefined });
     const report = await auditRules(files, { minTokens, minRepeats, aliasPrefix, counter });
     report.configPath = loadedConfig.path;
     report.preset = preset || null;
     report.discoveredFiles = discoveredFiles;
-    if (json) {
+    if (format === "json") {
       console.log(JSON.stringify(report, null, 2));
+    } else if (format === "markdown") {
+      console.log(formatAuditMarkdown(report));
     } else {
       console.log(formatAuditTable(report));
     }
-    return 0;
+    const failed = failOnMatched(report, failOn);
+    if (failed) console.error(`rulemeter: --fail-on ${failOn} matched`);
+    return failed ? 1 : 0;
   }
 
   if (command === "count") {
@@ -183,7 +230,7 @@ async function run(argv: string[]): Promise<number> {
 }
 
 function errorPayload(error: unknown): { schemaVersion: typeof ERROR_SCHEMA_VERSION; error: { code: string; message: string } } {
-  if (error instanceof CliError) {
+  if (error instanceof RulemeterError) {
     return { schemaVersion: ERROR_SCHEMA_VERSION, error: { code: error.code, message: error.message } };
   }
   if (error instanceof TokenizerLoadError) {
@@ -196,7 +243,7 @@ function errorPayload(error: unknown): { schemaVersion: typeof ERROR_SCHEMA_VERS
 }
 
 function exitCode(error: unknown): number {
-  if (error instanceof CliError) return error.exitCode;
+  if (error instanceof RulemeterError) return error.exitCode;
   if (error instanceof TokenizerLoadError) return 2;
   return 1;
 }

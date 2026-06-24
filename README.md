@@ -2,9 +2,9 @@
 
 > Status: Lab — standalone validation before possible `create-starter audit-agent-rules` absorption.
 
-`RuleMeter` audits agent instruction files such as `AGENTS.md`, `CLAUDE.md`, and task prompts for repeated rules that might be alias candidates.
+`RuleMeter` audits agent instruction files such as `AGENTS.md`, `CLAUDE.md`, and task prompts for duplicated rules, token cost, and risky instruction compression.
 
-It measures whether a rule alias actually pays for itself before it lets token-saving pressure blur critical instructions.
+It helps maintainers see which repeated rules can be deduplicated, which rules should stay explicit, and whether an alias would actually pay for itself before token-saving pressure blurs critical instructions.
 
 It is not a general prompt compressor and it does not rewrite files. Its job is to measure:
 
@@ -38,6 +38,8 @@ rulemeter audit AGENTS.md CLAUDE.md task.txt
 rulemeter audit AGENTS.md CLAUDE.md task.txt
 rulemeter audit --preset all
 rulemeter audit --preset claude --list-files
+rulemeter audit --preset all --format markdown
+rulemeter audit --preset all --fail-on duplicate
 rulemeter audit AGENTS.md --json --encoding cl100k_base
 rulemeter audit AGENTS.md --config rulemeter.config.json
 rulemeter count "RULE_01 = preserve existing module boundaries" --encoding o200k_base
@@ -69,6 +71,32 @@ Machine-readable output includes a stable `schemaVersion`:
 Treat new keys as additive. Existing v1 key names are intended to stay stable.
 
 Table output uses the compact column name `dedupe_saved`; JSON uses `duplicateSavedTokens` for the same value.
+
+Errors use `rulemeter.error.v1` and stable `error.code` values for automation. Common user-facing codes include `NO_FILES_FOUND`, `FILE_NOT_FOUND`, `NOT_A_FILE`, `CONFIG_NOT_FOUND`, `CONFIG_INVALID_JSON`, `CONFIG_INVALID`, `INVALID_ALIAS_PREFIX`, `INVALID_OPTION`, `UNKNOWN_FLAG`, `UNKNOWN_COMMAND`, and `TOKENIZER_NOT_FOUND`.
+
+## Reports And Gates
+
+Use Markdown output for PR comments or CI summaries:
+
+```bash
+rulemeter audit --preset all --format markdown
+```
+
+Use `--fail-on` to make CI fail after printing the normal report:
+
+```bash
+rulemeter audit --preset all --fail-on duplicate
+rulemeter audit --preset all --fail-on risk
+rulemeter audit --preset all --fail-on candidate
+```
+
+| Gate | Fails when |
+|---|---|
+| `duplicate` | At least one candidate recommends `remove_duplicate`. |
+| `risk` | At least one candidate has a high-risk label. |
+| `candidate` | At least one candidate recommends `candidate`. |
+
+If preset discovery finds no files, `--list-files` returns an empty list with exit code 0, while a real audit exits with `NO_FILES_FOUND`.
 
 ## Presets
 
@@ -135,6 +163,7 @@ These default to `keep_explicit` because preserving critical instructions is mor
 - Token counts use OpenAI tokenizers by default, so non-OpenAI agent files should treat numbers as approximations.
 - Stable prefix files such as `AGENTS.md` and `CLAUDE.md` may be cached by their host tools, so token savings can be less valuable than dynamic prompt savings.
 - Markdown code fences, tables, blockquotes, and indented code are skipped; RuleMeter focuses on prose/list instruction text.
+- Wrapped list items are joined before comparison so line wrapping does not create separate fragment rules.
 
 ## Verification
 
