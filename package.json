@@ -20,8 +20,9 @@
     "test": "npm run build && node --test test/*.test.js",
     "dogfood": "npm run build && node dist/cli.js audit fixtures/AGENTS.md fixtures/CLAUDE.md fixtures/task.txt",
     "pack:check": "npm run build && node scripts/check-pack.mjs",
+    "smoke:install": "npm run build && node scripts/smoke-install.mjs",
     "prepare": "npm run build",
-    "prepublishOnly": "npm test && npm run dogfood && npm run pack:check && npm audit --audit-level=high"
+    "prepublishOnly": "npm test && npm run dogfood && npm run pack:check && npm run smoke:install && npm audit --audit-level=high"
   },
   "keywords": [
     "agents",
