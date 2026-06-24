@@ -14,7 +14,7 @@ function help(): string {
   return `rulemeter — audit agent instruction files for alias break-even and compression risk.
 
 Usage
-  rulemeter audit <file...> [--json] [--format table|markdown|json] [--fail-on duplicate|risk|candidate] [--config PATH] [--preset NAME] [--list-files] [--encoding NAME] [--model NAME] [--allow-fallback] [--min-tokens N] [--min-repeats N] [--alias-prefix RULE]
+  rulemeter audit <file...> [--json] [--format table|markdown|json] [--fail-on duplicate|risk|candidate|similar] [--experimental-similar] [--similarity-threshold N] [--config PATH] [--preset NAME] [--list-files] [--encoding NAME] [--model NAME] [--allow-fallback] [--min-tokens N] [--min-repeats N] [--alias-prefix RULE]
   rulemeter count <text> [--json] [--config PATH] [--encoding NAME] [--model NAME] [--allow-fallback]
   rulemeter --version
   rulemeter --help
@@ -24,6 +24,7 @@ Examples
   rulemeter audit AGENTS.md --json --encoding cl100k_base
   rulemeter audit --preset all --format markdown
   rulemeter audit --preset all --fail-on duplicate
+  rulemeter audit --preset all --experimental-similar --format markdown
   rulemeter audit AGENTS.md --config rulemeter.config.json
   rulemeter audit --preset all --list-files
   rulemeter count "RULE_01 = preserve existing module boundaries" --encoding o200k_base
@@ -33,7 +34,7 @@ Examples
 class CliError extends RulemeterError {}
 
 type AuditFormat = "table" | "markdown" | "json";
-type FailOn = "duplicate" | "risk" | "candidate";
+type FailOn = "duplicate" | "risk" | "candidate" | "similar";
 
 function takeValue(args: string[], flag: string, fallback: string): string {
   const index = args.indexOf(flag);
@@ -62,6 +63,14 @@ function positiveInteger(value: string, flag: string): number {
   return parsed;
 }
 
+function thresholdNumber(value: string, flag: string): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 1) {
+    throw new CliError("INVALID_OPTION", `${flag} must be a number greater than 0 and at most 1`);
+  }
+  return parsed;
+}
+
 function mergeString(cliValue: string, configValue: string | undefined, fallback: string): string {
   return cliValue || configValue || fallback;
 }
@@ -86,8 +95,8 @@ function parseAuditFormat(value: string, json: boolean): AuditFormat {
 
 function parseFailOn(value: string): FailOn | null {
   if (!value) return null;
-  if (value === "duplicate" || value === "risk" || value === "candidate") return value;
-  throw new CliError("INVALID_OPTION", "--fail-on must be one of: duplicate, risk, candidate");
+  if (value === "duplicate" || value === "risk" || value === "candidate" || value === "similar") return value;
+  throw new CliError("INVALID_OPTION", "--fail-on must be one of: duplicate, risk, candidate, similar");
 }
 
 function assertPreset(preset: string): void {
@@ -122,6 +131,7 @@ function failOnMatched(report: Awaited<ReturnType<typeof auditRules>>, failOn: F
   if (!failOn) return false;
   if (failOn === "duplicate") return report.candidates.some((candidate) => candidate.recommendation === "remove_duplicate");
   if (failOn === "risk") return report.candidates.some((candidate) => candidate.risks.length > 0);
+  if (failOn === "similar") return report.similarCandidates.length > 0;
   return report.candidates.some((candidate) => candidate.recommendation === "candidate");
 }
 
@@ -145,6 +155,8 @@ async function run(argv: string[]): Promise<number> {
     const format = parseAuditFormat(takeValue(args, "--format", ""), json);
     const failOn = parseFailOn(takeValue(args, "--fail-on", ""));
     const listFiles = takeBool(args, "--list-files");
+    const includeSimilar = takeBool(args, "--experimental-similar");
+    const similarityThreshold = thresholdNumber(takeValue(args, "--similarity-threshold", "0.65"), "--similarity-threshold");
     const preset = takeValue(args, "--preset", "");
     assertPreset(preset);
     const allowFallback = takeBool(args, "--allow-fallback") || config.allowFallback === true;
@@ -179,7 +191,7 @@ async function run(argv: string[]): Promise<number> {
     assertFilesFound(files, preset);
     assertFiles(files);
     const counter = loadTokenCounter({ allowFallback, encoding: encoding || undefined, model: model || undefined });
-    const report = await auditRules(files, { minTokens, minRepeats, aliasPrefix, counter });
+    const report = await auditRules(files, { minTokens, minRepeats, aliasPrefix, counter, includeSimilar, similarityThreshold });
     report.configPath = loadedConfig.path;
     report.preset = preset || null;
     report.discoveredFiles = discoveredFiles;
