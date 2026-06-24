@@ -184,8 +184,11 @@ These default to `keep_explicit` because preserving critical instructions is mor
 npm test
 npm run dogfood
 npm run pack:check
+npm run smoke:install
 npm audit --audit-level=high
 ```
+
+`smoke:install` packs the current checkout into a local tarball, installs that tarball in a temporary consumer project, and verifies the installed `rulemeter` binary. This keeps release validation useful even when npm publication is deferred.
 
 ## Scope
 
