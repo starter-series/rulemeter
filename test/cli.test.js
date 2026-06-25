@@ -49,6 +49,7 @@ test("CLI audit emits Markdown report", async () => {
     },
   );
   assert.match(stdout, /^# RuleMeter Report/m);
+  assert.match(stdout, /- risk findings: 0/);
   assert.match(stdout, /\| Rule \| Recommendation \| Risk \|/);
   assert.match(stdout, /\| `RULE_01` \| `remove_duplicate` \|/);
 });
@@ -67,6 +68,30 @@ test("CLI fail-on duplicate exits non-zero after printing report", async () => {
       assert.equal(payload.schemaVersion, "rulemeter.audit.v1");
       assert.equal(payload.candidates[0].recommendation, "remove_duplicate");
       assert.match(error.stderr, /--fail-on duplicate matched/);
+      return true;
+    },
+  );
+});
+
+test("CLI fail-on risk uses risk findings outside duplicate candidates", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "rulemeter-risk-test-"));
+  const path = join(dir, "AGENTS.md");
+  await writeFile(path, "- Actually run tests and report the verification command before claiming success.\n", "utf8");
+
+  await assert.rejects(
+    execFileAsync(
+      process.execPath,
+      ["dist/cli.js", "audit", path, "--json", "--encoding", "cl100k_base", "--min-tokens", "5", "--fail-on", "risk"],
+      { cwd: process.cwd() },
+    ),
+    (error) => {
+      const payload = JSON.parse(error.stdout);
+      assert.equal(error.code, 1);
+      assert.equal(payload.schemaVersion, "rulemeter.audit.v1");
+      assert.equal(payload.candidates.length, 0);
+      assert.equal(payload.riskFindings.length, 1);
+      assert.deepEqual(payload.riskFindings[0].risks, ["test_required"]);
+      assert.match(error.stderr, /--fail-on risk matched/);
       return true;
     },
   );

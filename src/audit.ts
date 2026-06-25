@@ -29,6 +29,14 @@ export interface RuleCandidate {
   cacheHint: "stable_prefix_candidate" | "dynamic_task_or_local_context";
 }
 
+export interface RiskFinding {
+  text: string;
+  occurrences: Occurrence[];
+  rawTokens: number;
+  risks: RiskLabel[];
+  cacheHint: "stable_prefix_candidate" | "dynamic_task_or_local_context";
+}
+
 export type SimilarRecommendation = "review_similar" | "keep_explicit";
 
 export interface SimilarRuleCandidate {
@@ -65,6 +73,7 @@ export interface AuditReport {
   files: string[];
   warnings: RulemeterWarning[];
   candidates: RuleCandidate[];
+  riskFindings: RiskFinding[];
   similarCandidates: SimilarRuleCandidate[];
 }
 
@@ -253,6 +262,20 @@ function findSimilarCandidates(groups: SegmentGroup[], threshold: number): Simil
   return candidates.sort((left, right) => right.similarity - left.similarity || left.texts[0].localeCompare(right.texts[0]));
 }
 
+function findRiskFindings(groups: SegmentGroup[]): RiskFinding[] {
+  return groups
+    .map((group) => ({ ...group, risks: classifyRisks(group.text) }))
+    .filter((group) => group.risks.length > 0)
+    .map((group) => ({
+      text: group.text,
+      occurrences: group.occurrences,
+      rawTokens: group.rawTokens,
+      risks: group.risks,
+      cacheHint: cacheHintFor(group.occurrences),
+    }))
+    .sort((left, right) => left.occurrences[0].path.localeCompare(right.occurrences[0].path) || left.occurrences[0].line - right.occurrences[0].line);
+}
+
 export async function auditDocuments(documents: AuditDocument[], options: AuditOptions = {}): Promise<AuditReport> {
   const minTokens = options.minTokens ?? 12;
   const minRepeats = options.minRepeats ?? 2;
@@ -279,6 +302,7 @@ export async function auditDocuments(documents: AuditDocument[], options: AuditO
     return leftText.localeCompare(rightText);
   });
   const segmentGroups: SegmentGroup[] = entries.map(([text, occurrences]) => ({ text, occurrences, rawTokens: counter.count(text) }));
+  const riskFindings = findRiskFindings(segmentGroups);
 
   for (const { text, occurrences, rawTokens } of segmentGroups) {
     const repeats = occurrences.length;
@@ -321,6 +345,7 @@ export async function auditDocuments(documents: AuditDocument[], options: AuditO
     files: documents.map((document) => document.id),
     warnings: counter.name === "fallback_regex" ? [{ code: "APPROXIMATE_TOKENIZER", message: "Token counts are approximate." }] : [],
     candidates,
+    riskFindings,
     similarCandidates: includeSimilar
       ? findSimilarCandidates(
           segmentGroups.filter((group) => group.rawTokens >= minTokens),
