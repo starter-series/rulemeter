@@ -2,59 +2,50 @@ import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import { classifyRisks, isHighRisk, type RiskLabel } from "./risk.js";
 import { AUDIT_SCHEMA_VERSION, type RulemeterWarning } from "./schema.js";
-import { loadTokenCounter, type TokenCounter } from "./tokenizer.js";
 
 export interface Occurrence {
   path: string;
   line: number;
 }
 
-export type Recommendation = "candidate" | "keep_explicit" | "remove_duplicate" | "do_not_alias" | "below_breakeven";
+export type CacheHint = "stable_prefix_candidate" | "dynamic_task_or_local_context";
+export type Recommendation = "keep_explicit" | "remove_duplicate";
 
 export interface RuleCandidate {
-  rule: string;
+  id: string;
   text: string;
   repeats: number;
   occurrences: Occurrence[];
-  rawTokens: number;
-  aliasTokens: number;
-  legendTokens: number;
-  originalTokens: number;
-  compressedTokens: number;
-  savedTokens: number;
-  duplicateSavedTokens: number;
-  breakeven: number | null;
+  chars: number;
   risks: RiskLabel[];
   recommendation: Recommendation;
-  cacheHint: "stable_prefix_candidate" | "dynamic_task_or_local_context";
+  cacheHint: CacheHint;
 }
 
 export interface RiskFinding {
   text: string;
   occurrences: Occurrence[];
-  rawTokens: number;
+  chars: number;
   risks: RiskLabel[];
-  cacheHint: "stable_prefix_candidate" | "dynamic_task_or_local_context";
+  cacheHint: CacheHint;
 }
 
 export type SimilarRecommendation = "review_similar" | "keep_explicit";
 
 export interface SimilarRuleCandidate {
-  rule: string;
+  id: string;
   texts: string[];
   repeats: number;
   occurrences: Occurrence[];
   similarity: number;
   risks: RiskLabel[];
   recommendation: SimilarRecommendation;
-  cacheHint: "stable_prefix_candidate" | "dynamic_task_or_local_context";
+  cacheHint: CacheHint;
 }
 
 export interface AuditOptions {
-  minTokens?: number;
+  minChars?: number;
   minRepeats?: number;
-  aliasPrefix?: string;
-  counter?: TokenCounter;
   includeSimilar?: boolean;
   similarityThreshold?: number;
 }
@@ -68,7 +59,6 @@ export interface AuditReport {
   schemaVersion: typeof AUDIT_SCHEMA_VERSION;
   configPath?: string | null;
   discoveredFiles?: string[];
-  tokenizer: string;
   preset?: string | null;
   files: string[];
   warnings: RulemeterWarning[];
@@ -85,7 +75,7 @@ interface Segment {
 interface SegmentGroup {
   text: string;
   occurrences: Occurrence[];
-  rawTokens: number;
+  chars: number;
 }
 
 export function normalizeSegment(text: string): string {
@@ -172,13 +162,7 @@ export function extractSegments(source: string): Segment[] {
   return segments;
 }
 
-export function computeBreakeven(rawTokens: number, aliasTokens: number, legendTokens: number): number | null {
-  const perUseGain = rawTokens - aliasTokens;
-  if (perUseGain <= 0) return null;
-  return Math.floor(legendTokens / perUseGain) + 1;
-}
-
-function cacheHintFor(occurrences: Occurrence[]): RuleCandidate["cacheHint"] {
+function cacheHintFor(occurrences: Occurrence[]): CacheHint {
   const names = new Set(occurrences.map((occurrence) => basename(occurrence.path).toLowerCase()));
   if (names.has("agents.md") || names.has("claude.md")) return "stable_prefix_candidate";
   return "dynamic_task_or_local_context";
@@ -188,30 +172,8 @@ function uniqueRisks(risks: RiskLabel[]): RiskLabel[] {
   return [...new Set(risks)].sort((left, right) => left.localeCompare(right)) as RiskLabel[];
 }
 
-function recommendationFor(params: {
-  repeats: number;
-  savedTokens: number;
-  breakeven: number | null;
-  risks: RiskLabel[];
-  minRepeats: number;
-}): Recommendation {
-  if (isHighRisk(params.risks)) return "keep_explicit";
-  if (params.repeats < params.minRepeats) return "do_not_alias";
-  if (params.repeats > 1) return "remove_duplicate";
-  if (params.breakeven === null) return "do_not_alias";
-  if (params.savedTokens <= 0) return "do_not_alias";
-  if (params.repeats < params.breakeven) return "below_breakeven";
-  return "candidate";
-}
-
-function nextAvailableAlias(prefix: string, index: number, corpus: string): string {
-  let candidate = `${prefix}_${String(index).padStart(2, "0")}`;
-  let current = index;
-  while (new RegExp(`\\b${candidate}\\b`, "u").test(corpus)) {
-    current += 1;
-    candidate = `${prefix}_${String(current).padStart(2, "0")}`;
-  }
-  return candidate;
+function recommendationFor(risks: RiskLabel[]): Recommendation {
+  return isHighRisk(risks) ? "keep_explicit" : "remove_duplicate";
 }
 
 function wordSet(text: string): Set<string> {
@@ -247,7 +209,7 @@ function findSimilarCandidates(groups: SegmentGroup[], threshold: number): Simil
       const occurrences = [...left.occurrences, ...right.occurrences];
       const risks = uniqueRisks([...classifyRisks(left.text), ...classifyRisks(right.text)]);
       candidates.push({
-        rule: `SIM_${String(candidates.length + 1).padStart(2, "0")}`,
+        id: `SIM_${String(candidates.length + 1).padStart(2, "0")}`,
         texts: [left.text, right.text],
         repeats: occurrences.length,
         occurrences,
@@ -269,7 +231,7 @@ function findRiskFindings(groups: SegmentGroup[]): RiskFinding[] {
     .map((group) => ({
       text: group.text,
       occurrences: group.occurrences,
-      rawTokens: group.rawTokens,
+      chars: group.chars,
       risks: group.risks,
       cacheHint: cacheHintFor(group.occurrences),
     }))
@@ -277,14 +239,10 @@ function findRiskFindings(groups: SegmentGroup[]): RiskFinding[] {
 }
 
 export async function auditDocuments(documents: AuditDocument[], options: AuditOptions = {}): Promise<AuditReport> {
-  const minTokens = options.minTokens ?? 12;
+  const minChars = options.minChars ?? 40;
   const minRepeats = options.minRepeats ?? 2;
-  const aliasPrefix = options.aliasPrefix ?? "RULE";
   const includeSimilar = options.includeSimilar ?? false;
   const similarityThreshold = options.similarityThreshold ?? 0.65;
-  const counter = options.counter ?? loadTokenCounter();
-
-  const corpus = documents.map((document) => document.text).join("\n");
   const grouped = new Map<string, Occurrence[]>();
 
   for (const document of documents) {
@@ -295,60 +253,40 @@ export async function auditDocuments(documents: AuditDocument[], options: AuditO
     }
   }
 
-  const candidates: RuleCandidate[] = [];
-  let index = 1;
   const entries = [...grouped.entries()].sort(([leftText, leftOccurrences], [rightText, rightOccurrences]) => {
     if (leftOccurrences.length !== rightOccurrences.length) return rightOccurrences.length - leftOccurrences.length;
     return leftText.localeCompare(rightText);
   });
-  const segmentGroups: SegmentGroup[] = entries.map(([text, occurrences]) => ({ text, occurrences, rawTokens: counter.count(text) }));
+  const segmentGroups: SegmentGroup[] = entries.map(([text, occurrences]) => ({ text, occurrences, chars: text.length }));
   const riskFindings = findRiskFindings(segmentGroups);
 
-  for (const { text, occurrences, rawTokens } of segmentGroups) {
+  const candidates: RuleCandidate[] = [];
+  for (const { text, occurrences, chars } of segmentGroups) {
     const repeats = occurrences.length;
-    if (rawTokens < minTokens || repeats < minRepeats) continue;
-
-    const alias = nextAvailableAlias(aliasPrefix, index, corpus);
-    const aliasTokens = counter.count(alias);
-    const legendTokens = counter.count(`${alias} = ${text}`);
-    const originalTokens = rawTokens * repeats;
-    const compressedTokens = legendTokens + aliasTokens * repeats;
-    const savedTokens = originalTokens - compressedTokens;
-    const duplicateSavedTokens = rawTokens * (repeats - 1);
-    const breakeven = computeBreakeven(rawTokens, aliasTokens, legendTokens);
+    if (chars < minChars || repeats < minRepeats) continue;
     const risks = classifyRisks(text);
-    const recommendation = recommendationFor({ repeats, savedTokens, breakeven, risks, minRepeats });
 
     candidates.push({
-      rule: alias,
+      id: `DUP_${String(candidates.length + 1).padStart(2, "0")}`,
       text,
       repeats,
       occurrences,
-      rawTokens,
-      aliasTokens,
-      legendTokens,
-      originalTokens,
-      compressedTokens,
-      savedTokens,
-      duplicateSavedTokens,
-      breakeven,
+      chars,
       risks,
-      recommendation,
+      recommendation: recommendationFor(risks),
       cacheHint: cacheHintFor(occurrences),
     });
-    index += 1;
   }
 
   return {
     schemaVersion: AUDIT_SCHEMA_VERSION,
-    tokenizer: counter.name,
     files: documents.map((document) => document.id),
-    warnings: counter.name === "fallback_regex" ? [{ code: "APPROXIMATE_TOKENIZER", message: "Token counts are approximate." }] : [],
+    warnings: [],
     candidates,
     riskFindings,
     similarCandidates: includeSimilar
       ? findSimilarCandidates(
-          segmentGroups.filter((group) => group.rawTokens >= minTokens),
+          segmentGroups.filter((group) => group.chars >= minChars),
           similarityThreshold,
         )
       : [],

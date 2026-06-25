@@ -1,12 +1,12 @@
 export {
   auditDocuments,
   auditRules,
-  computeBreakeven,
   extractSegments,
   normalizeSegment,
   type AuditDocument,
   type AuditOptions,
   type AuditReport,
+  type CacheHint,
   type Occurrence,
   type Recommendation,
   type RiskFinding,
@@ -19,5 +19,4 @@ export { RulemeterError } from "./errors.js";
 export { formatAuditMarkdown, formatAuditTable } from "./format.js";
 export { discoverPresetFiles, presetNames, type PresetName } from "./presets.js";
 export { classifyRisks, highRiskLabels, isHighRisk, riskRules, type RiskLabel } from "./risk.js";
-export { AUDIT_SCHEMA_VERSION, COUNT_SCHEMA_VERSION, DISCOVERY_SCHEMA_VERSION, ERROR_SCHEMA_VERSION, type RulemeterWarning } from "./schema.js";
-export { loadTokenCounter, RegexTokenCounter, TokenizerLoadError, type TokenCounter } from "./tokenizer.js";
+export { AUDIT_SCHEMA_VERSION, DISCOVERY_SCHEMA_VERSION, ERROR_SCHEMA_VERSION, type RulemeterWarning } from "./schema.js";

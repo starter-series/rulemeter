@@ -32,13 +32,19 @@ try {
     throw new Error(`unexpected CLI version: ${version}`);
   }
 
-  const countOutput = run("npx", ["rulemeter", "count", "Preserve existing module boundaries", "--json"], { cwd: consumer });
-  const count = JSON.parse(countOutput);
-  if (count.schemaVersion !== "rulemeter.count.v1" || typeof count.tokens !== "number") {
-    throw new Error("count smoke did not return a valid rulemeter.count.v1 payload");
+  writeFileSync(
+    join(consumer, "AGENTS.md"),
+    "- Preserve existing module boundaries.\n- Preserve existing module boundaries.\n- Actually run tests before claiming success.\n",
+    "utf8",
+  );
+
+  const auditOutput = run("npx", ["rulemeter", "audit", "AGENTS.md", "--json", "--min-chars", "10"], { cwd: consumer });
+  const audit = JSON.parse(auditOutput);
+  if (audit.schemaVersion !== "rulemeter.audit.v2" || audit.candidates.length !== 1 || audit.riskFindings.length !== 1) {
+    throw new Error("audit smoke did not return a valid rulemeter.audit.v2 payload");
   }
 
-  console.log(`install smoke ok: ${pack.name}@${pack.version} (${pack.entryCount} files, ${count.tokens} tokens)`);
+  console.log(`install smoke ok: ${pack.name}@${pack.version} (${pack.entryCount} files, audit v2)`);
 } finally {
   if (process.env.RULEMETER_KEEP_SMOKE_DIR) {
     console.log(`kept smoke directory: ${tempRoot}`);

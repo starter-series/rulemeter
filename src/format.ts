@@ -25,7 +25,7 @@ function escapeMarkdown(value: string): string {
 }
 
 export function formatAuditTable(report: AuditReport): string {
-  const lines: string[] = [`tokenizer: ${report.tokenizer}`];
+  const lines: string[] = [];
   if (report.configPath) lines.push(`config: ${report.configPath}`);
   if (report.preset) lines.push(`preset: ${report.preset}`);
   if (report.discoveredFiles && report.discoveredFiles.length > 0) {
@@ -37,33 +37,17 @@ export function formatAuditTable(report: AuditReport): string {
   if (report.candidates.length === 0) {
     lines.push("No exact duplicate candidates met the thresholds.");
   } else {
-    const headers = [
-      "rule",
-      "repeats",
-      "raw",
-      "alias",
-      "legend",
-      "saved",
-      "dedupe_saved",
-      "breakeven",
-      "risk",
-      "recommendation",
-      "cache_hint",
-      "locations",
-    ];
+    lines.push("Duplicate candidates:");
+    const headers = ["id", "repeats", "chars", "risk", "recommendation", "cache_hint", "locations", "text"];
     const rows = report.candidates.map((candidate) => [
-      candidate.rule,
+      candidate.id,
       String(candidate.repeats),
-      String(candidate.rawTokens),
-      String(candidate.aliasTokens),
-      String(candidate.legendTokens),
-      String(candidate.savedTokens),
-      String(candidate.duplicateSavedTokens),
-      candidate.breakeven === null ? "never" : String(candidate.breakeven),
+      String(candidate.chars),
       riskText(candidate),
       candidate.recommendation,
       candidate.cacheHint,
       locationsText(candidate),
+      candidate.text,
     ]);
     const widths = headers.map((header, index) => Math.max(header.length, ...rows.map((row) => row[index]?.length ?? 0)));
 
@@ -77,10 +61,10 @@ export function formatAuditTable(report: AuditReport): string {
   if (report.riskFindings.length > 0) {
     lines.push("");
     lines.push("Risk findings:");
-    const headers = ["risk", "tokens", "cache_hint", "locations", "text"];
+    const headers = ["risk", "chars", "cache_hint", "locations", "text"];
     const rows = report.riskFindings.map((finding) => [
       finding.risks.join(","),
-      String(finding.rawTokens),
+      String(finding.chars),
       finding.cacheHint,
       findingLocationsText(finding),
       finding.text,
@@ -99,9 +83,9 @@ export function formatAuditTable(report: AuditReport): string {
 
   lines.push("");
   lines.push("Similar rule candidates:");
-  const headers = ["rule", "similarity", "risk", "recommendation", "locations", "texts"];
+  const headers = ["id", "similarity", "risk", "recommendation", "locations", "texts"];
   const rows = report.similarCandidates.map((candidate) => [
-    candidate.rule,
+    candidate.id,
     String(candidate.similarity),
     candidate.risks.length > 0 ? candidate.risks.join(",") : "low",
     candidate.recommendation,
@@ -119,11 +103,10 @@ export function formatAuditTable(report: AuditReport): string {
 
 export function formatAuditMarkdown(report: AuditReport): string {
   const lines: string[] = ["# RuleMeter Report", ""];
-  lines.push(`- tokenizer: \`${report.tokenizer}\``);
   if (report.configPath) lines.push(`- config: \`${report.configPath}\``);
   if (report.preset) lines.push(`- preset: \`${report.preset}\``);
   lines.push(`- files: ${report.files.length}`);
-  lines.push(`- candidates: ${report.candidates.length}`);
+  lines.push(`- duplicate candidates: ${report.candidates.length}`);
   lines.push(`- risk findings: ${report.riskFindings.length}`);
   lines.push(`- similar candidates: ${report.similarCandidates.length}`);
   if (report.discoveredFiles && report.discoveredFiles.length > 0) {
@@ -137,17 +120,18 @@ export function formatAuditMarkdown(report: AuditReport): string {
   if (report.candidates.length === 0) {
     lines.push("No exact duplicate candidates met the thresholds.");
   } else {
-    lines.push("| Rule | Recommendation | Risk | Repeats | Saved | Dedupe saved | Locations | Text |");
-    lines.push("|---|---|---|---:|---:|---:|---|---|");
+    lines.push("## Duplicate Candidates");
+    lines.push("");
+    lines.push("| ID | Recommendation | Risk | Repeats | Chars | Locations | Text |");
+    lines.push("|---|---|---|---:|---:|---|---|");
     for (const candidate of report.candidates) {
       lines.push(
         `| ${[
-          `\`${escapeMarkdown(candidate.rule)}\``,
+          `\`${escapeMarkdown(candidate.id)}\``,
           `\`${escapeMarkdown(candidate.recommendation)}\``,
           escapeMarkdown(riskText(candidate)),
           String(candidate.repeats),
-          String(candidate.savedTokens),
-          String(candidate.duplicateSavedTokens),
+          String(candidate.chars),
           escapeMarkdown(locationsText(candidate)),
           escapeMarkdown(candidate.text),
         ].join(" | ")} |`,
@@ -159,13 +143,13 @@ export function formatAuditMarkdown(report: AuditReport): string {
     lines.push("");
     lines.push("## Risk Findings");
     lines.push("");
-    lines.push("| Risk | Tokens | Cache hint | Locations | Text |");
+    lines.push("| Risk | Chars | Cache hint | Locations | Text |");
     lines.push("|---|---:|---|---|---|");
     for (const finding of report.riskFindings) {
       lines.push(
         `| ${[
           escapeMarkdown(finding.risks.join(",")),
-          String(finding.rawTokens),
+          String(finding.chars),
           `\`${escapeMarkdown(finding.cacheHint)}\``,
           escapeMarkdown(findingLocationsText(finding)),
           escapeMarkdown(finding.text),
@@ -178,12 +162,12 @@ export function formatAuditMarkdown(report: AuditReport): string {
     lines.push("");
     lines.push("## Similar Rule Candidates");
     lines.push("");
-    lines.push("| Rule | Recommendation | Similarity | Risk | Locations | Texts |");
+    lines.push("| ID | Recommendation | Similarity | Risk | Locations | Texts |");
     lines.push("|---|---|---:|---|---|---|");
     for (const candidate of report.similarCandidates) {
       lines.push(
         `| ${[
-          `\`${escapeMarkdown(candidate.rule)}\``,
+          `\`${escapeMarkdown(candidate.id)}\``,
           `\`${escapeMarkdown(candidate.recommendation)}\``,
           String(candidate.similarity),
           escapeMarkdown(candidate.risks.length > 0 ? candidate.risks.join(",") : "low"),

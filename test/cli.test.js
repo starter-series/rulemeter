@@ -25,47 +25,38 @@ async function fixture() {
 
 test("CLI audit emits JSON", async () => {
   const path = await fixture();
-  const { stdout } = await execFileAsync(
-    process.execPath,
-    ["dist/cli.js", "audit", path, "--json", "--encoding", "cl100k_base", "--min-tokens", "5"],
-    {
-      cwd: process.cwd(),
-    },
-  );
+  const { stdout } = await execFileAsync(process.execPath, ["dist/cli.js", "audit", path, "--json", "--min-chars", "5"], {
+    cwd: process.cwd(),
+  });
   const payload = JSON.parse(stdout);
-  assert.equal(payload.schemaVersion, "rulemeter.audit.v1");
-  assert.equal(payload.tokenizer, "cl100k_base");
+  assert.equal(payload.schemaVersion, "rulemeter.audit.v2");
   assert.equal(payload.candidates.length, 1);
+  assert.equal(payload.candidates[0].id, "DUP_01");
   assert.equal(payload.candidates[0].recommendation, "remove_duplicate");
 });
 
 test("CLI audit emits Markdown report", async () => {
   const path = await fixture();
-  const { stdout } = await execFileAsync(
-    process.execPath,
-    ["dist/cli.js", "audit", path, "--format", "markdown", "--encoding", "cl100k_base", "--min-tokens", "5"],
-    {
-      cwd: process.cwd(),
-    },
-  );
+  const { stdout } = await execFileAsync(process.execPath, ["dist/cli.js", "audit", path, "--format", "markdown", "--min-chars", "5"], {
+    cwd: process.cwd(),
+  });
   assert.match(stdout, /^# RuleMeter Report/m);
+  assert.match(stdout, /- duplicate candidates: 1/);
   assert.match(stdout, /- risk findings: 0/);
-  assert.match(stdout, /\| Rule \| Recommendation \| Risk \|/);
-  assert.match(stdout, /\| `RULE_01` \| `remove_duplicate` \|/);
+  assert.match(stdout, /\| ID \| Recommendation \| Risk \|/);
+  assert.match(stdout, /\| `DUP_01` \| `remove_duplicate` \|/);
 });
 
 test("CLI fail-on duplicate exits non-zero after printing report", async () => {
   const path = await fixture();
   await assert.rejects(
-    execFileAsync(
-      process.execPath,
-      ["dist/cli.js", "audit", path, "--json", "--encoding", "cl100k_base", "--min-tokens", "5", "--fail-on", "duplicate"],
-      { cwd: process.cwd() },
-    ),
+    execFileAsync(process.execPath, ["dist/cli.js", "audit", path, "--json", "--min-chars", "5", "--fail-on", "duplicate"], {
+      cwd: process.cwd(),
+    }),
     (error) => {
       const payload = JSON.parse(error.stdout);
       assert.equal(error.code, 1);
-      assert.equal(payload.schemaVersion, "rulemeter.audit.v1");
+      assert.equal(payload.schemaVersion, "rulemeter.audit.v2");
       assert.equal(payload.candidates[0].recommendation, "remove_duplicate");
       assert.match(error.stderr, /--fail-on duplicate matched/);
       return true;
@@ -79,15 +70,13 @@ test("CLI fail-on risk uses risk findings outside duplicate candidates", async (
   await writeFile(path, "- Actually run tests and report the verification command before claiming success.\n", "utf8");
 
   await assert.rejects(
-    execFileAsync(
-      process.execPath,
-      ["dist/cli.js", "audit", path, "--json", "--encoding", "cl100k_base", "--min-tokens", "5", "--fail-on", "risk"],
-      { cwd: process.cwd() },
-    ),
+    execFileAsync(process.execPath, ["dist/cli.js", "audit", path, "--json", "--min-chars", "5", "--fail-on", "risk"], {
+      cwd: process.cwd(),
+    }),
     (error) => {
       const payload = JSON.parse(error.stdout);
       assert.equal(error.code, 1);
-      assert.equal(payload.schemaVersion, "rulemeter.audit.v1");
+      assert.equal(payload.schemaVersion, "rulemeter.audit.v2");
       assert.equal(payload.candidates.length, 0);
       assert.equal(payload.riskFindings.length, 1);
       assert.deepEqual(payload.riskFindings[0].risks, ["test_required"]);
@@ -111,16 +100,7 @@ test("CLI experimental similar emits Markdown and fail-on similar", async () => 
 
   const { stdout } = await execFileAsync(
     process.execPath,
-    [
-      "dist/cli.js",
-      "audit",
-      path,
-      "--experimental-similar",
-      "--format",
-      "markdown",
-      "--min-tokens",
-      "5",
-    ],
+    ["dist/cli.js", "audit", path, "--experimental-similar", "--format", "markdown", "--min-chars", "5"],
     { cwd: process.cwd() },
   );
   assert.match(stdout, /Similar Rule Candidates/);
@@ -129,17 +109,7 @@ test("CLI experimental similar emits Markdown and fail-on similar", async () => 
   await assert.rejects(
     execFileAsync(
       process.execPath,
-      [
-        "dist/cli.js",
-        "audit",
-        path,
-        "--experimental-similar",
-        "--fail-on",
-        "similar",
-        "--json",
-        "--min-tokens",
-        "5",
-      ],
+      ["dist/cli.js", "audit", path, "--experimental-similar", "--fail-on", "similar", "--json", "--min-chars", "5"],
       { cwd: process.cwd() },
     ),
     (error) => {
@@ -152,90 +122,31 @@ test("CLI experimental similar emits Markdown and fail-on similar", async () => 
   );
 });
 
-test("CLI count reports tokens", async () => {
-  const { stdout } = await execFileAsync(
-    process.execPath,
-    ["dist/cli.js", "count", "RULE_01 = preserve existing style", "--encoding", "o200k_base"],
-    {
-      cwd: process.cwd(),
-    },
-  );
-  assert.match(stdout, /tokenizer: o200k_base/);
-  assert.match(stdout, /tokens: \d+/);
-});
-
-test("CLI count JSON includes schema version", async () => {
-  const { stdout } = await execFileAsync(
-    process.execPath,
-    ["dist/cli.js", "count", "RULE_01 = preserve existing style", "--json", "--encoding", "cl100k_base"],
-    {
-      cwd: process.cwd(),
-    },
-  );
-  const payload = JSON.parse(stdout);
-  assert.equal(payload.schemaVersion, "rulemeter.count.v1");
-  assert.equal(payload.tokenizer, "cl100k_base");
-  assert.equal(payload.warnings.length, 0);
-  assert.equal(typeof payload.tokens, "number");
-});
-
-test("CLI errors on unknown explicit tokenizer", async () => {
+test("CLI reports typed unknown count command error", async () => {
   await assert.rejects(
-    execFileAsync(process.execPath, ["dist/cli.js", "count", "hello", "--json", "--encoding", "not_real"], {
+    execFileAsync(process.execPath, ["dist/cli.js", "count", "hello", "--json"], {
       cwd: process.cwd(),
     }),
     (error) => {
       const payload = JSON.parse(error.stderr);
       assert.equal(payload.schemaVersion, "rulemeter.error.v1");
-      assert.equal(payload.error.code, "TOKENIZER_NOT_FOUND");
+      assert.equal(payload.error.code, "UNKNOWN_COMMAND");
       return true;
     },
   );
-});
-
-test("CLI explains unsupported Claude and Gemini model names", async () => {
-  for (const model of ["claude-opus-4", "gemini-1.5-pro"]) {
-    await assert.rejects(
-      execFileAsync(process.execPath, ["dist/cli.js", "count", "hello", "--json", "--model", model], {
-        cwd: process.cwd(),
-      }),
-      (error) => {
-        const payload = JSON.parse(error.stderr);
-        assert.equal(payload.schemaVersion, "rulemeter.error.v1");
-        assert.equal(payload.error.code, "TOKENIZER_NOT_FOUND");
-        assert.match(payload.error.message, /js-tiktoken model mappings/);
-        assert.match(payload.error.message, /approximation/);
-        return true;
-      },
-    );
-  }
-});
-
-test("CLI allows explicit fallback only when requested", async () => {
-  const { stdout } = await execFileAsync(
-    process.execPath,
-    ["dist/cli.js", "count", "hello", "--json", "--encoding", "not_real", "--allow-fallback"],
-    {
-      cwd: process.cwd(),
-    },
-  );
-  const payload = JSON.parse(stdout);
-  assert.equal(payload.tokenizer, "fallback_regex");
-  assert.equal(payload.warnings[0].code, "APPROXIMATE_TOKENIZER");
 });
 
 test("CLI audit reads config file", async () => {
   const path = await fixture();
   const dir = await mkdtemp(join(tmpdir(), "rulemeter-config-test-"));
   const configPath = join(dir, "rulemeter.config.json");
-  await writeFile(configPath, JSON.stringify({ aliasPrefix: "RM", encoding: "cl100k_base", minTokens: 5 }), "utf8");
+  await writeFile(configPath, JSON.stringify({ minChars: 5 }), "utf8");
   const { stdout } = await execFileAsync(process.execPath, ["dist/cli.js", "audit", path, "--json", "--config", configPath], {
     cwd: process.cwd(),
   });
   const payload = JSON.parse(stdout);
   assert.equal(payload.configPath, configPath);
-  assert.equal(payload.tokenizer, "cl100k_base");
-  assert.match(payload.candidates[0].rule, /^RM_/);
+  assert.equal(payload.candidates[0].id, "DUP_01");
   assert.equal(payload.candidates[0].recommendation, "remove_duplicate");
 });
 
@@ -258,7 +169,7 @@ test("CLI reports typed invalid config errors", async () => {
   const configPath = join(dir, "rulemeter.config.json");
   await writeFile(configPath, "{ bad json", "utf8");
   await assert.rejects(
-    execFileAsync(process.execPath, ["dist/cli.js", "count", "hello", "--json", "--config", configPath], {
+    execFileAsync(process.execPath, ["dist/cli.js", "audit", "--preset", "all", "--json", "--config", configPath], {
       cwd: process.cwd(),
     }),
     (error) => {
@@ -270,19 +181,23 @@ test("CLI reports typed invalid config errors", async () => {
   );
 });
 
-test("CLI validates alias prefix before building regexes", async () => {
+test("CLI rejects removed tokenizer and alias options", async () => {
   const path = await fixture();
-  await assert.rejects(
-    execFileAsync(process.execPath, ["dist/cli.js", "audit", path, "--json", "--alias-prefix", "R["], {
-      cwd: process.cwd(),
-    }),
-    (error) => {
-      const payload = JSON.parse(error.stderr);
-      assert.equal(payload.schemaVersion, "rulemeter.error.v1");
-      assert.equal(payload.error.code, "INVALID_ALIAS_PREFIX");
-      return true;
-    },
-  );
+  for (const flag of ["--encoding", "--model", "--allow-fallback", "--alias-prefix", "--min-tokens"]) {
+    const args = ["dist/cli.js", "audit", path, "--json", flag];
+    if (flag !== "--allow-fallback") args.push("value");
+    await assert.rejects(
+      execFileAsync(process.execPath, args, {
+        cwd: process.cwd(),
+      }),
+      (error) => {
+        const payload = JSON.parse(error.stderr);
+        assert.equal(payload.schemaVersion, "rulemeter.error.v1");
+        assert.ok(["UNKNOWN_FLAG", "INVALID_OPTION"].includes(payload.error.code), flag);
+        return true;
+      },
+    );
+  }
 });
 
 test("CLI empty preset list-files is allowed but audit reports NO_FILES_FOUND", async () => {
@@ -319,11 +234,9 @@ test("CLI preset discovers Codex instruction files", async () => {
   await writeFile(join(nested, "AGENTS.md"), `${text}\n`, "utf8");
   await writeFile(join(ignored, "AGENTS.md"), `${text}\n`, "utf8");
 
-  const { stdout } = await execFileAsync(
-    process.execPath,
-    [cliPath, "audit", "--preset", "codex", "--json", "--encoding", "cl100k_base", "--min-tokens", "5"],
-    { cwd: dir },
-  );
+  const { stdout } = await execFileAsync(process.execPath, [cliPath, "audit", "--preset", "codex", "--json", "--min-chars", "5"], {
+    cwd: dir,
+  });
   const payload = JSON.parse(stdout);
   assert.equal(payload.preset, "codex");
   assert.deepEqual(payload.discoveredFiles, ["AGENTS.md", "packages/app/AGENTS.md"]);

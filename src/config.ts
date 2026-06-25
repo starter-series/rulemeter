@@ -4,12 +4,8 @@ import { join } from "node:path";
 import { RulemeterError } from "./errors.js";
 
 export interface RulemeterConfig {
-  aliasPrefix?: string;
-  allowFallback?: boolean;
-  encoding?: string;
+  minChars?: number;
   minRepeats?: number;
-  minTokens?: number;
-  model?: string;
 }
 
 export interface LoadedRulemeterConfig {
@@ -21,20 +17,6 @@ function assertObject(value: unknown, path: string): asserts value is Record<str
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new RulemeterError("CONFIG_INVALID", `${path} must contain a JSON object`);
   }
-}
-
-function optionalString(value: unknown, key: string): string | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new RulemeterError("CONFIG_INVALID", `${key} must be a non-empty string`);
-  }
-  return value;
-}
-
-function optionalBoolean(value: unknown, key: string): boolean | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value !== "boolean") throw new RulemeterError("CONFIG_INVALID", `${key} must be a boolean`);
-  return value;
 }
 
 function optionalPositiveInteger(value: unknown, key: string): number | undefined {
@@ -65,12 +47,8 @@ export async function loadRulemeterConfigWithMeta(configPath?: string): Promise<
   assertObject(parsed, path);
   return {
     config: {
-      aliasPrefix: optionalString(parsed.aliasPrefix, "aliasPrefix"),
-      allowFallback: optionalBoolean(parsed.allowFallback, "allowFallback"),
-      encoding: optionalString(parsed.encoding, "encoding"),
+      minChars: optionalPositiveInteger(parsed.minChars, "minChars"),
       minRepeats: optionalPositiveInteger(parsed.minRepeats, "minRepeats"),
-      minTokens: optionalPositiveInteger(parsed.minTokens, "minTokens"),
-      model: optionalString(parsed.model, "model"),
     },
     path,
   };

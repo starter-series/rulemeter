@@ -1,7 +1,7 @@
 {
   "name": "rulemeter",
   "version": "0.1.0",
-  "description": "Audit duplicated agent rules, token cost, and risky instruction compression.",
+  "description": "Best-effort advisory lint for duplicated and risky agent instruction rules.",
   "homepage": "https://starter-series.github.io/rulemeter/",
   "type": "module",
   "bin": {
@@ -29,7 +29,7 @@
     "agents",
     "prompt",
     "audit",
-    "tokens",
+    "lint",
     "cli"
   ],
   "author": "heznpc",
@@ -47,8 +47,5 @@
   "devDependencies": {
     "@types/node": "^25.9.2",
     "typescript": "^6.0.3"
-  },
-  "dependencies": {
-    "js-tiktoken": "^1.0.21"
   }
 }
