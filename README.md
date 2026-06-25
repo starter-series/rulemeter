@@ -171,7 +171,7 @@ When a config file is loaded, table output prints `config: <path>` and JSON outp
 - `logs_or_errors`
 - `security_policy`
 
-These default to `keep_explicit` because preserving critical instructions is more important than saving tokens. Risk labels are conservative keyword matches, not semantic classification; expect some false positives.
+These default to `keep_explicit` because preserving critical instructions is more important than saving tokens. Risk labels are conservative keyword matches for operational safety rules, not semantic classification. Lines that merely inventory risk categories are skipped to reduce self-reference noise; expect some false positives.
 
 ## Limits
 

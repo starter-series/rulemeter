@@ -45,10 +45,33 @@ test("common app words do not trigger high-risk labels alone", () => {
     "Send a confirmation email.",
     "Fix the error state copy.",
     "Open the security settings screen.",
+    "Validate the input field label.",
+    "This repo has one developer (heznpc) running one session at a time.",
+    "The product reduces approval fatigue for solo developers.",
+    "검증 가능한 배지 설명을 유지하세요.",
+    "보안 설정 화면을 유지하세요.",
+    "Open the audit history panel.",
+    "The layout sanitizer keeps labels tidy.",
     "검색 키워드 입력란을 유지하세요.",
     "문서 작성자 정보를 표시하세요.",
   ];
   for (const text of cases) assert.deepEqual(classifyRisks(text), [], text);
+});
+
+test("risk category inventory lines do not self-trigger labels", () => {
+  const labels = classifyRisks(
+    "Preserve high-risk rules explicitly when they mention identity, PII, approval, tests, strategy ratification, logs, errors, or security.",
+  );
+  assert.deepEqual(labels, []);
+});
+
+test("test suite and input validation safety rules are detected", () => {
+  assert.deepEqual(classifyRisks("Run the full test suite in CI before merging"), ["test_required"]);
+  assert.deepEqual(classifyRisks("Validate and sanitize all user input to prevent injection"), ["security_policy"]);
+  assert.deepEqual(classifyRisks("Do not bypass the HMAC-chained audit log."), ["security_policy"]);
+  assert.deepEqual(classifyRisks("Keep the path sanitizer because it prevents path-injection."), ["security_policy"]);
+  assert.deepEqual(classifyRisks("테스트 실행 결과와 검증 명령을 보고하세요."), ["test_required"]);
+  assert.deepEqual(classifyRisks("입력 검증과 인젝션 방지 규칙을 유지하세요."), ["security_policy"]);
 });
 
 test("risk findings scan single-stated rules outside duplicate candidates", async () => {
