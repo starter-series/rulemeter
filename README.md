@@ -2,21 +2,17 @@
 
 > Status: Lab — standalone validation before possible `create-starter audit-agent-rules` absorption.
 
-`RuleMeter` audits agent instruction files such as `AGENTS.md`, `CLAUDE.md`, and task prompts for duplicated rules, token cost, and risky instruction compression.
+`RuleMeter` is a report-only advisory lint for agent instruction files such as `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and Copilot instruction files.
 
 Website: https://starter-series.github.io/rulemeter/
 
-It helps maintainers see which repeated rules can be deduplicated, which rules should stay explicit, and whether an alias would actually pay for itself before token-saving pressure blurs critical instructions.
+It helps maintainers review:
 
-It is not a general prompt compressor and it does not rewrite files. Its job is to measure:
+- exact duplicated instruction text
+- risky instruction wording that may deserve human review
+- optional lexical near-duplicate candidates
 
-- repeated rule text
-- raw token estimate
-- alias and legend cost
-- break-even repeat count
-- saved token estimate
-- cache-prefix hint
-- high-risk rules that should stay explicit
+It does not rewrite files, compress prompts, guarantee safety coverage, or prove that an instruction set is secure. Treat the report as a review aid, not an enforcement engine.
 
 ## Install
 
@@ -42,10 +38,10 @@ rulemeter audit --preset all
 rulemeter audit --preset claude --list-files
 rulemeter audit --preset all --format markdown
 rulemeter audit --preset all --fail-on duplicate
+rulemeter audit --preset all --fail-on risk
 rulemeter audit --preset all --experimental-similar --format markdown
-rulemeter audit AGENTS.md --json --encoding cl100k_base
+rulemeter audit AGENTS.md --json
 rulemeter audit AGENTS.md --config rulemeter.config.json
-rulemeter count "RULE_01 = preserve existing module boundaries" --encoding o200k_base
 ```
 
 From source:
@@ -55,31 +51,21 @@ node dist/cli.js audit AGENTS.md CLAUDE.md task.txt
 npm run dogfood
 ```
 
-`RuleMeter` uses `js-tiktoken` by default and tries `o200k_base`, then `cl100k_base`. Pass `--encoding cl100k_base`, `--encoding o200k_base`, or `--model <name>` when you need an explicit tokenizer.
-
-`js-tiktoken` is an OpenAI tokenizer implementation. For Claude, Gemini, Copilot, and Antigravity instruction files, token counts are useful as a consistent approximation and comparison signal, not as vendor billing-token truth. `--model` accepts model names known to `js-tiktoken`; for Claude or Gemini files, pass `--encoding o200k_base` or `--encoding cl100k_base` explicitly.
-
-If the default tokenizer cannot be loaded, output falls back to `fallback_regex` and emits an `APPROXIMATE_TOKENIZER` warning. If you explicitly pass `--encoding` or `--model`, unknown tokenizer names fail instead of silently falling back. Use `--allow-fallback` only when approximate token counts are acceptable.
-
-Exact duplicated rules usually save more by deleting the duplicate line than by introducing a legend plus alias. RuleMeter reports that as `remove_duplicate`; use alias candidates only when duplicate text must remain in multiple instruction surfaces.
-
 ## JSON Contract
 
 Machine-readable output includes a stable `schemaVersion`:
 
-- `rulemeter.audit.v1` for `audit --json`
-- `rulemeter.count.v1` for `count --json`
+- `rulemeter.audit.v2` for `audit --json`
+- `rulemeter.discovery.v1` for `audit --list-files --json`
 - `rulemeter.error.v1` for JSON errors
 
-Treat new keys as additive. Existing v1 key names are intended to stay stable.
+`rulemeter.audit.v2` intentionally removes the earlier draft token/alias fields and `count` command surface. Treat new keys as additive within v2.
 
-Table output uses the compact column name `dedupe_saved`; JSON uses `duplicateSavedTokens` for the same value.
+`riskFindings` lists keyword-based risk matches independently from duplicate candidates, so `--fail-on risk` can catch single-stated rules. This is still best-effort and non-exhaustive.
 
-`riskFindings` lists high-risk instruction segments independently from duplicate candidates, so `--fail-on risk` can catch single-stated rules that should remain visible.
+Errors use `rulemeter.error.v1` and stable `error.code` values for automation. Common user-facing codes include `NO_FILES_FOUND`, `FILE_NOT_FOUND`, `NOT_A_FILE`, `CONFIG_NOT_FOUND`, `CONFIG_INVALID_JSON`, `CONFIG_INVALID`, `INVALID_OPTION`, `UNKNOWN_FLAG`, and `UNKNOWN_COMMAND`.
 
-Errors use `rulemeter.error.v1` and stable `error.code` values for automation. Common user-facing codes include `NO_FILES_FOUND`, `FILE_NOT_FOUND`, `NOT_A_FILE`, `CONFIG_NOT_FOUND`, `CONFIG_INVALID_JSON`, `CONFIG_INVALID`, `INVALID_ALIAS_PREFIX`, `INVALID_OPTION`, `UNKNOWN_FLAG`, `UNKNOWN_COMMAND`, and `TOKENIZER_NOT_FOUND`.
-
-## Reports And Gates
+## Reports And CI Tripwires
 
 Use Markdown output for PR comments or CI summaries:
 
@@ -92,16 +78,16 @@ Use `--fail-on` to make CI fail after printing the normal report:
 ```bash
 rulemeter audit --preset all --fail-on duplicate
 rulemeter audit --preset all --fail-on risk
-rulemeter audit --preset all --fail-on candidate
 rulemeter audit --preset all --experimental-similar --fail-on similar
 ```
 
 | Gate | Fails when |
 |---|---|
-| `duplicate` | At least one candidate recommends `remove_duplicate`. |
-| `risk` | At least one independent risk finding was found. |
-| `candidate` | At least one candidate recommends `candidate`. |
+| `duplicate` | At least one exact duplicate candidate recommends `remove_duplicate`. |
+| `risk` | At least one best-effort risk finding was found. |
 | `similar` | At least one experimental similar-rule candidate was found. |
+
+Do not treat `--fail-on risk` as a safety certification gate. It is useful for review attention and regression tripwires, but it can miss important safety rules.
 
 If preset discovery finds no files, `--list-files` returns an empty list with exit code 0, while a real audit exits with `NO_FILES_FOUND`.
 
@@ -112,7 +98,7 @@ rulemeter audit --preset all --experimental-similar
 rulemeter audit --preset all --experimental-similar --similarity-threshold 0.8
 ```
 
-The default similarity threshold is `0.65`. `similarCandidates` are additive JSON fields under `rulemeter.audit.v1`. They are review prompts, not automatic dedupe or alias recommendations.
+The default similarity threshold is `0.65`. `similarCandidates` are review prompts, not automatic semantic dedupe.
 
 ## Presets
 
@@ -139,11 +125,8 @@ rulemeter audit --preset all --list-files --json
 
 ```json
 {
-  "aliasPrefix": "RULE",
-  "allowFallback": false,
-  "encoding": "o200k_base",
-  "minRepeats": 2,
-  "minTokens": 12
+  "minChars": 40,
+  "minRepeats": 2
 }
 ```
 
@@ -155,11 +138,8 @@ When a config file is loaded, table output prints `config: <path>` and JSON outp
 
 | Recommendation | Meaning |
 |---|---|
-| `candidate` | Alias could save tokens and no high-risk label was detected. |
-| `keep_explicit` | The rule mentions identity, PII, approval, tests, strategy ratification, logs, errors, or security. |
-| `remove_duplicate` | Exact duplicate text was found; deleting duplicate occurrences saves more than introducing an alias. |
-| `do_not_alias` | Alias is not useful under the current thresholds. |
-| `below_breakeven` | Alias might help later, but current repeat count is too low. |
+| `remove_duplicate` | Exact duplicate text was found and appears safe enough to review for deletion. |
+| `keep_explicit` | The text matched a risk label, so duplicate removal should be reviewed carefully. |
 
 ## Risk Labels
 
@@ -171,14 +151,23 @@ When a config file is loaded, table output prints `config: <path>` and JSON outp
 - `logs_or_errors`
 - `security_policy`
 
-These default to `keep_explicit` because preserving critical instructions is more important than saving tokens. Risk labels are conservative keyword matches for operational safety rules, not semantic classification. Lines that merely inventory risk categories are skipped to reduce self-reference noise; expect some false positives.
+Risk labels are conservative keyword matches for operational review. They are not semantic classification. Lines that merely inventory risk categories are skipped to reduce self-reference noise.
+
+Known holdout blind spots include phrasing such as:
+
+- `Never paste production database passwords into chat.`
+- `Encrypt customer records at rest using AES-256.`
+- `Rotate production credentials every 90 days.`
+- `Get written sign-off from the release manager before shipping.`
+- `Escape all SQL parameters before running a query.`
+
+These are important safety rules, but the current keyword lint may not flag them. Do not rely on RuleMeter as the only review layer for security, privacy, approval, or release-safety instructions.
 
 ## Limits
 
-- RuleMeter's default recommendations only group exact normalized duplicate text.
+- RuleMeter's default duplicate recommendations only group exact normalized duplicate text.
 - Experimental similar-rule detection uses lexical overlap and is off by default. Treat `similarCandidates` as review prompts, not proof of semantic equivalence.
-- Token counts use OpenAI tokenizers by default, so non-OpenAI agent files should treat numbers as approximations.
-- Stable prefix files such as `AGENTS.md` and `CLAUDE.md` may be cached by their host tools, so token savings can be less valuable than dynamic prompt savings.
+- Risk findings are keyword-based and non-exhaustive; they can produce both false positives and false negatives.
 - Markdown code fences, tables, blockquotes, and indented code are skipped; RuleMeter focuses on prose/list instruction text.
 - Wrapped list items are joined before comparison so line wrapping does not create separate fragment rules.
 
@@ -196,4 +185,4 @@ npm audit --audit-level=high
 
 ## Scope
 
-This repo exists to validate whether agent-rule auditing is useful as a small standalone tool. If it proves useful repeatedly, the intended absorption path is `create-starter audit-agent-rules`.
+This repo exists to validate whether agent-rule advisory linting is useful as a small standalone tool. If it proves useful repeatedly, the intended absorption path is `create-starter audit-agent-rules`.

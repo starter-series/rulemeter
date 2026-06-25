@@ -5,36 +5,34 @@ import { loadRulemeterConfigWithMeta, type RulemeterConfig } from "./config.js";
 import { RulemeterError } from "./errors.js";
 import { formatAuditMarkdown, formatAuditTable } from "./format.js";
 import { discoverPresetFiles, presetNames } from "./presets.js";
-import { COUNT_SCHEMA_VERSION, DISCOVERY_SCHEMA_VERSION, ERROR_SCHEMA_VERSION } from "./schema.js";
-import { loadTokenCounter, TokenizerLoadError } from "./tokenizer.js";
+import { DISCOVERY_SCHEMA_VERSION, ERROR_SCHEMA_VERSION } from "./schema.js";
 
 const VERSION = "0.1.0";
 
 function help(): string {
-  return `rulemeter — audit agent instruction files for alias break-even and compression risk.
+  return `rulemeter — best-effort advisory lint for agent instruction files.
 
 Usage
-  rulemeter audit <file...> [--json] [--format table|markdown|json] [--fail-on duplicate|risk|candidate|similar] [--experimental-similar] [--similarity-threshold N] [--config PATH] [--preset NAME] [--list-files] [--encoding NAME] [--model NAME] [--allow-fallback] [--min-tokens N] [--min-repeats N] [--alias-prefix RULE]
-  rulemeter count <text> [--json] [--config PATH] [--encoding NAME] [--model NAME] [--allow-fallback]
+  rulemeter audit <file...> [--json] [--format table|markdown|json] [--fail-on duplicate|risk|similar] [--experimental-similar] [--similarity-threshold N] [--config PATH] [--preset NAME] [--list-files] [--min-chars N] [--min-repeats N]
   rulemeter --version
   rulemeter --help
 
 Examples
   rulemeter audit AGENTS.md CLAUDE.md task.txt
-  rulemeter audit AGENTS.md --json --encoding cl100k_base
+  rulemeter audit AGENTS.md --json
   rulemeter audit --preset all --format markdown
   rulemeter audit --preset all --fail-on duplicate
+  rulemeter audit --preset all --fail-on risk
   rulemeter audit --preset all --experimental-similar --format markdown
   rulemeter audit AGENTS.md --config rulemeter.config.json
   rulemeter audit --preset all --list-files
-  rulemeter count "RULE_01 = preserve existing module boundaries" --encoding o200k_base
 `;
 }
 
 class CliError extends RulemeterError {}
 
 type AuditFormat = "table" | "markdown" | "json";
-type FailOn = "duplicate" | "risk" | "candidate" | "similar";
+type FailOn = "duplicate" | "risk" | "similar";
 
 function takeValue(args: string[], flag: string, fallback: string): string {
   const index = args.indexOf(flag);
@@ -71,20 +69,6 @@ function thresholdNumber(value: string, flag: string): number {
   return parsed;
 }
 
-function mergeString(cliValue: string, configValue: string | undefined, fallback: string): string {
-  return cliValue || configValue || fallback;
-}
-
-function assertTokenizerChoice(encoding: string, model: string): void {
-  if (encoding && model) throw new CliError("INVALID_OPTION", "--encoding and --model are mutually exclusive");
-}
-
-function assertAliasPrefix(prefix: string): void {
-  if (!/^[A-Za-z][A-Za-z0-9]*$/u.test(prefix)) {
-    throw new CliError("INVALID_ALIAS_PREFIX", "--alias-prefix must start with a letter and contain only letters or digits");
-  }
-}
-
 function parseAuditFormat(value: string, json: boolean): AuditFormat {
   if (json && value && value !== "json") throw new CliError("INVALID_OPTION", "--json cannot be combined with --format table or --format markdown");
   if (json) return "json";
@@ -95,8 +79,8 @@ function parseAuditFormat(value: string, json: boolean): AuditFormat {
 
 function parseFailOn(value: string): FailOn | null {
   if (!value) return null;
-  if (value === "duplicate" || value === "risk" || value === "candidate" || value === "similar") return value;
-  throw new CliError("INVALID_OPTION", "--fail-on must be one of: duplicate, risk, candidate, similar");
+  if (value === "duplicate" || value === "risk" || value === "similar") return value;
+  throw new CliError("INVALID_OPTION", "--fail-on must be one of: duplicate, risk, similar");
 }
 
 function assertPreset(preset: string): void {
@@ -131,8 +115,7 @@ function failOnMatched(report: Awaited<ReturnType<typeof auditRules>>, failOn: F
   if (!failOn) return false;
   if (failOn === "duplicate") return report.candidates.some((candidate) => candidate.recommendation === "remove_duplicate");
   if (failOn === "risk") return report.riskFindings.length > 0;
-  if (failOn === "similar") return report.similarCandidates.length > 0;
-  return report.candidates.some((candidate) => candidate.recommendation === "candidate");
+  return report.similarCandidates.length > 0;
 }
 
 async function run(argv: string[]): Promise<number> {
@@ -159,14 +142,8 @@ async function run(argv: string[]): Promise<number> {
     const similarityThreshold = thresholdNumber(takeValue(args, "--similarity-threshold", "0.65"), "--similarity-threshold");
     const preset = takeValue(args, "--preset", "");
     assertPreset(preset);
-    const allowFallback = takeBool(args, "--allow-fallback") || config.allowFallback === true;
-    const minTokens = positiveInteger(takeValue(args, "--min-tokens", String(config.minTokens ?? 12)), "--min-tokens");
+    const minChars = positiveInteger(takeValue(args, "--min-chars", String(config.minChars ?? 40)), "--min-chars");
     const minRepeats = positiveInteger(takeValue(args, "--min-repeats", String(config.minRepeats ?? 2)), "--min-repeats");
-    const aliasPrefix = takeValue(args, "--alias-prefix", config.aliasPrefix ?? "RULE");
-    assertAliasPrefix(aliasPrefix);
-    const encoding = mergeString(takeValue(args, "--encoding", ""), config.encoding, "");
-    const model = mergeString(takeValue(args, "--model", ""), config.model, "");
-    assertTokenizerChoice(encoding, model);
     assertNoUnknownFlags(args);
     const discoveredFiles = preset ? await discoverPresetFiles(preset) : [];
     const files = unique([...args, ...discoveredFiles]);
@@ -190,8 +167,7 @@ async function run(argv: string[]): Promise<number> {
 
     assertFilesFound(files, preset);
     assertFiles(files);
-    const counter = loadTokenCounter({ allowFallback, encoding: encoding || undefined, model: model || undefined });
-    const report = await auditRules(files, { minTokens, minRepeats, aliasPrefix, counter, includeSimilar, similarityThreshold });
+    const report = await auditRules(files, { minChars, minRepeats, includeSimilar, similarityThreshold });
     report.configPath = loadedConfig.path;
     report.preset = preset || null;
     report.discoveredFiles = discoveredFiles;
@@ -207,45 +183,11 @@ async function run(argv: string[]): Promise<number> {
     return failed ? 1 : 0;
   }
 
-  if (command === "count") {
-    const configPath = takeValue(args, "--config", "");
-    const loadedConfig = await loadRulemeterConfigWithMeta(configPath || undefined);
-    const config: RulemeterConfig = loadedConfig.config;
-    const json = takeBool(args, "--json");
-    const allowFallback = takeBool(args, "--allow-fallback") || config.allowFallback === true;
-    const encoding = mergeString(takeValue(args, "--encoding", ""), config.encoding, "");
-    const model = mergeString(takeValue(args, "--model", ""), config.model, "");
-    assertTokenizerChoice(encoding, model);
-    assertNoUnknownFlags(args);
-    const text = args.join(" ");
-    if (text.length === 0) throw new CliError("MISSING_TEXT", "count requires text");
-    const counter = loadTokenCounter({ allowFallback, encoding: encoding || undefined, model: model || undefined });
-    const payload = {
-      schemaVersion: COUNT_SCHEMA_VERSION,
-      configPath: loadedConfig.path,
-      tokenizer: counter.name,
-      warnings: counter.name === "fallback_regex" ? [{ code: "APPROXIMATE_TOKENIZER", message: "Token counts are approximate." }] : [],
-      tokens: counter.count(text),
-      text,
-    };
-    if (json) {
-      console.log(JSON.stringify(payload, null, 2));
-    } else {
-      console.log(`tokenizer: ${payload.tokenizer}`);
-      if (payload.configPath) console.log(`config: ${payload.configPath}`);
-      console.log(`tokens: ${payload.tokens}`);
-    }
-    return 0;
-  }
-
   throw new CliError("UNKNOWN_COMMAND", `unknown command: ${command ?? ""}`);
 }
 
 function errorPayload(error: unknown): { schemaVersion: typeof ERROR_SCHEMA_VERSION; error: { code: string; message: string } } {
   if (error instanceof RulemeterError) {
-    return { schemaVersion: ERROR_SCHEMA_VERSION, error: { code: error.code, message: error.message } };
-  }
-  if (error instanceof TokenizerLoadError) {
     return { schemaVersion: ERROR_SCHEMA_VERSION, error: { code: error.code, message: error.message } };
   }
   return {
@@ -256,7 +198,6 @@ function errorPayload(error: unknown): { schemaVersion: typeof ERROR_SCHEMA_VERS
 
 function exitCode(error: unknown): number {
   if (error instanceof RulemeterError) return error.exitCode;
-  if (error instanceof TokenizerLoadError) return 2;
   return 1;
 }
 

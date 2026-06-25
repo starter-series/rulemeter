@@ -6,12 +6,12 @@
     <title>RuleMeter</title>
     <meta
       name="description"
-      content="RuleMeter audits repeated agent instructions, token break-even, and high-risk rules that should stay explicit."
+      content="RuleMeter is a report-only advisory lint for duplicated and risky agent instruction rules."
     />
     <meta property="og:title" content="RuleMeter" />
     <meta
       property="og:description"
-      content="A report-only CLI for measuring repeated agent rules before token-saving pressure blurs critical instructions."
+      content="A best-effort review aid for exact duplicates, keyword risk findings, and optional near-duplicate prompts."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://starter-series.github.io/rulemeter/" />
@@ -43,10 +43,10 @@
     <main id="top">
       <section class="hero">
         <div class="hero-copy">
-          <h1 data-i18n="hero.title">Audit repeated agent rules before compression gets risky.</h1>
+          <h1 data-i18n="hero.title">Review agent rules without pretending the lint is exhaustive.</h1>
           <p data-i18n="hero.body">
-            RuleMeter is a report-only CLI for checking duplicated instruction text, alias break-even, token cost,
-            cache-prefix suitability, and high-risk rules that should stay explicit.
+            RuleMeter is a report-only advisory lint for duplicated instruction text, keyword-based risk findings,
+            and optional near-duplicate review prompts.
           </p>
           <div class="actions">
             <a class="button primary" href="https://github.com/starter-series/rulemeter" data-i18n="hero.primary">View on GitHub</a>
@@ -62,11 +62,12 @@
           <pre><code>rulemeter audit --preset all --format markdown
 
 files: 15
-candidates: 4
+risk findings: 6
+duplicate candidates: 4
 similar candidates: 7
 
-RULE_01 remove_duplicate low
-RULE_03 keep_explicit test_required</code></pre>
+DUP_01 remove_duplicate low
+risk: test_required</code></pre>
         </div>
       </section>
 
@@ -75,7 +76,7 @@ RULE_03 keep_explicit test_required</code></pre>
           <h2 data-i18n="workflow.title">Report first, rewrite never.</h2>
           <p data-i18n="workflow.body">
             RuleMeter does not edit files. It gives maintainers evidence for what is duplicated, what can be removed,
-            and what should remain explicit because it protects identity, approvals, tests, logs, or security.
+            and what deserves review, while documenting that keyword risk findings are not safety guarantees.
           </p>
         </div>
         <ol class="steps">
@@ -86,13 +87,13 @@ RULE_03 keep_explicit test_required</code></pre>
           </li>
           <li>
             <span>02</span>
-            <strong data-i18n="workflow.step2.title">Measure token economics</strong>
-            <p data-i18n="workflow.step2.body">Compare raw text, alias cost, legend cost, break-even, and duplicate deletion savings.</p>
+            <strong data-i18n="workflow.step2.title">Review exact duplicates</strong>
+            <p data-i18n="workflow.step2.body">Find normalized repeated instruction text without rewriting source files.</p>
           </li>
           <li>
             <span>03</span>
             <strong data-i18n="workflow.step3.title">Keep risky rules explicit</strong>
-            <p data-i18n="workflow.step3.body">Flag sensitive instruction families so safety-critical rules are not compressed away.</p>
+            <p data-i18n="workflow.step3.body">Surface keyword matches for human review, with known blind spots documented.</p>
           </li>
         </ol>
       </section>
@@ -102,19 +103,19 @@ RULE_03 keep_explicit test_required</code></pre>
         <div class="signal-grid">
           <article>
             <h3 data-i18n="signals.duplicates.title">Exact duplicates</h3>
-            <p data-i18n="signals.duplicates.body">Shows when deleting repeated text beats introducing an alias.</p>
+            <p data-i18n="signals.duplicates.body">Shows exact repeated text that may be safe to remove after review.</p>
           </article>
           <article>
             <h3 data-i18n="signals.risk.title">High-risk rules</h3>
-            <p data-i18n="signals.risk.body">Keeps identity, PII, approval, test, log, and security rules visible.</p>
+            <p data-i18n="signals.risk.body">Flags keyword matches for review, not exhaustive safety coverage.</p>
           </article>
           <article>
             <h3 data-i18n="signals.similar.title">Similar candidates</h3>
             <p data-i18n="signals.similar.body">Optional lexical-overlap review prompts, never automatic semantic dedupe.</p>
           </article>
           <article>
-            <h3 data-i18n="signals.ci.title">CI gates</h3>
-            <p data-i18n="signals.ci.body">Fail on duplicates, risks, candidates, or experimental similar-rule findings.</p>
+            <h3 data-i18n="signals.ci.title">CI tripwires</h3>
+            <p data-i18n="signals.ci.body">Fail on duplicates, risk findings, or experimental similar-rule findings.</p>
           </article>
         </div>
       </section>
