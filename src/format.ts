@@ -1,4 +1,4 @@
-import type { AuditReport, RuleCandidate, SimilarRuleCandidate } from "./audit.js";
+import type { AuditReport, RiskFinding, RuleCandidate, SimilarRuleCandidate } from "./audit.js";
 
 function riskText(candidate: RuleCandidate): string {
   return candidate.risks.length > 0 ? candidate.risks.join(",") : "low";
@@ -12,6 +12,12 @@ function locationsText(candidate: RuleCandidate): string {
 
 function similarLocationsText(candidate: SimilarRuleCandidate): string {
   return candidate.occurrences.map((occurrence) => `${occurrence.path}:${occurrence.line}`).join(", ");
+}
+
+function findingLocationsText(finding: RiskFinding): string {
+  const first = finding.occurrences.slice(0, 3).map((occurrence) => `${occurrence.path}:${occurrence.line}`);
+  if (finding.occurrences.length > 3) first.push(`+${finding.occurrences.length - 3} more`);
+  return first.join(", ");
 }
 
 function escapeMarkdown(value: string): string {
@@ -68,6 +74,25 @@ export function formatAuditTable(report: AuditReport): string {
     }
   }
 
+  if (report.riskFindings.length > 0) {
+    lines.push("");
+    lines.push("Risk findings:");
+    const headers = ["risk", "tokens", "cache_hint", "locations", "text"];
+    const rows = report.riskFindings.map((finding) => [
+      finding.risks.join(","),
+      String(finding.rawTokens),
+      finding.cacheHint,
+      findingLocationsText(finding),
+      finding.text,
+    ]);
+    const widths = headers.map((header, index) => Math.max(header.length, ...rows.map((row) => row[index]?.length ?? 0)));
+    lines.push(headers.map((header, index) => header.padEnd(widths[index] ?? header.length)).join("  "));
+    lines.push(widths.map((width) => "-".repeat(width)).join("  "));
+    for (const row of rows) {
+      lines.push(row.map((value, index) => value.padEnd(widths[index] ?? value.length)).join("  "));
+    }
+  }
+
   if (report.similarCandidates.length === 0) {
     return lines.join("\n");
   }
@@ -99,6 +124,7 @@ export function formatAuditMarkdown(report: AuditReport): string {
   if (report.preset) lines.push(`- preset: \`${report.preset}\``);
   lines.push(`- files: ${report.files.length}`);
   lines.push(`- candidates: ${report.candidates.length}`);
+  lines.push(`- risk findings: ${report.riskFindings.length}`);
   lines.push(`- similar candidates: ${report.similarCandidates.length}`);
   if (report.discoveredFiles && report.discoveredFiles.length > 0) {
     lines.push(`- discovered files: ${report.discoveredFiles.map((file) => `\`${file}\``).join(", ")}`);
@@ -124,6 +150,25 @@ export function formatAuditMarkdown(report: AuditReport): string {
           String(candidate.duplicateSavedTokens),
           escapeMarkdown(locationsText(candidate)),
           escapeMarkdown(candidate.text),
+        ].join(" | ")} |`,
+      );
+    }
+  }
+
+  if (report.riskFindings.length > 0) {
+    lines.push("");
+    lines.push("## Risk Findings");
+    lines.push("");
+    lines.push("| Risk | Tokens | Cache hint | Locations | Text |");
+    lines.push("|---|---:|---|---|---|");
+    for (const finding of report.riskFindings) {
+      lines.push(
+        `| ${[
+          escapeMarkdown(finding.risks.join(",")),
+          String(finding.rawTokens),
+          `\`${escapeMarkdown(finding.cacheHint)}\``,
+          escapeMarkdown(findingLocationsText(finding)),
+          escapeMarkdown(finding.text),
         ].join(" | ")} |`,
       );
     }

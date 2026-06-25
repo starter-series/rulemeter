@@ -43,10 +43,29 @@ test("common app words do not trigger high-risk labels alone", () => {
     "Respect the user tool permission settings.",
     "Log in the user and redirect.",
     "Send a confirmation email.",
+    "Fix the error state copy.",
+    "Open the security settings screen.",
     "검색 키워드 입력란을 유지하세요.",
     "문서 작성자 정보를 표시하세요.",
   ];
   for (const text of cases) assert.deepEqual(classifyRisks(text), [], text);
+});
+
+test("risk findings scan single-stated rules outside duplicate candidates", async () => {
+  const report = await auditDocuments(
+    [
+      {
+        id: "memory://rules",
+        text: "- Actually run tests and report the verification command before claiming success.",
+      },
+    ],
+    { counter: new RegexTokenCounter(), minTokens: 5 },
+  );
+  assert.equal(report.candidates.length, 0);
+  assert.equal(report.riskFindings.length, 1);
+  assert.deepEqual(report.riskFindings[0].risks, ["test_required"]);
+  assert.equal(report.riskFindings[0].occurrences[0].path, "memory://rules");
+  assert.equal(report.riskFindings[0].occurrences[0].line, 1);
 });
 
 test("markdown code fences tables and blockquotes are skipped", async () => {
@@ -136,6 +155,9 @@ test("identity and PII rules stay explicit", async () => {
   assert.equal(report.candidates[0].recommendation, "keep_explicit");
   assert.ok(report.candidates[0].risks.includes("identity"));
   assert.ok(report.candidates[0].risks.includes("pii"));
+  assert.equal(report.riskFindings.length, 1);
+  assert.ok(report.riskFindings[0].risks.includes("identity"));
+  assert.ok(report.riskFindings[0].risks.includes("pii"));
 });
 
 test("each high-risk family stays explicit", async () => {
@@ -153,5 +175,7 @@ test("each high-risk family stays explicit", async () => {
     assert.equal(report.candidates.length, 1, label);
     assert.equal(report.candidates[0].recommendation, "keep_explicit", label);
     assert.ok(report.candidates[0].risks.includes(label), label);
+    assert.equal(report.riskFindings.length, 1, label);
+    assert.ok(report.riskFindings[0].risks.includes(label), label);
   }
 });

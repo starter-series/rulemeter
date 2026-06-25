@@ -62,7 +62,14 @@ export const riskRules: RiskRule[] = [
   },
   {
     label: "test_required",
-    patterns: [/\btest\b/i, /\btests\b/i, /\bpytest\b/i, /\bnpm test\b/i, /\bCI\b/i, /테스트|검증/u],
+    patterns: [
+      /\bnpm\s+test\b/i,
+      /\bpytest\b/i,
+      /\b(?:actually\s+run|run|rerun|execute)\s+(?:the\s+)?(?:unit\s+|integration\s+|e2e\s+)?tests?\b/i,
+      /\b(?:CI|continuous integration)\s+(?:gate|check|status|workflow|run|pass|green)\b/i,
+      /\bverification command\b/i,
+      /테스트|검증/u,
+    ],
   },
   {
     label: "strategy_requires_ratification",
@@ -80,8 +87,9 @@ export const riskRules: RiskRule[] = [
   {
     label: "logs_or_errors",
     patterns: [
-      /\blog(?:s|ged|ging)?\b(?!\s+in\b)/i,
-      /\berror\b/i,
+      /\b(?:logs?|errors?)\b.*\b(?:compress|redact|report|excerpt|output|stack trace|stderr|stdout|build output)\b/i,
+      /\b(?:compress|redact|report)\b.*\b(?:logs?|errors?)\b/i,
+      /\berror\s+(?:message|log|output|trace|handling|report|excerpt)s?\b/i,
       /\btraceback\b/i,
       /\bstack trace\b/i,
       /\bstderr\b/i,
@@ -93,10 +101,10 @@ export const riskRules: RiskRule[] = [
   {
     label: "security_policy",
     patterns: [
-      /\bsecurity\b/i,
+      /\bsecurity\s+(?:policy|advisory|review|gate|rule|rules|permission|permissions|boundary|requirement|requirements|note|notes)\b/i,
       /\bCVE\b/i,
       /\bvulnerability\b/i,
-      /\bsecret\b/i,
+      /\bsecrets?\b/i,
       /\b(?:sandbox|filesystem|network|approval)\s+permissions?\b/i,
       /보안|취약점|권한\s*(?:정책|승인|상승)|시크릿/u,
     ],

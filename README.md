@@ -75,6 +75,8 @@ Treat new keys as additive. Existing v1 key names are intended to stay stable.
 
 Table output uses the compact column name `dedupe_saved`; JSON uses `duplicateSavedTokens` for the same value.
 
+`riskFindings` lists high-risk instruction segments independently from duplicate candidates, so `--fail-on risk` can catch single-stated rules that should remain visible.
+
 Errors use `rulemeter.error.v1` and stable `error.code` values for automation. Common user-facing codes include `NO_FILES_FOUND`, `FILE_NOT_FOUND`, `NOT_A_FILE`, `CONFIG_NOT_FOUND`, `CONFIG_INVALID_JSON`, `CONFIG_INVALID`, `INVALID_ALIAS_PREFIX`, `INVALID_OPTION`, `UNKNOWN_FLAG`, `UNKNOWN_COMMAND`, and `TOKENIZER_NOT_FOUND`.
 
 ## Reports And Gates
@@ -97,7 +99,7 @@ rulemeter audit --preset all --experimental-similar --fail-on similar
 | Gate | Fails when |
 |---|---|
 | `duplicate` | At least one candidate recommends `remove_duplicate`. |
-| `risk` | At least one candidate has a high-risk label. |
+| `risk` | At least one independent risk finding was found. |
 | `candidate` | At least one candidate recommends `candidate`. |
 | `similar` | At least one experimental similar-rule candidate was found. |
 

@@ -130,7 +130,7 @@ function assertFilesFound(paths: string[], preset: string): void {
 function failOnMatched(report: Awaited<ReturnType<typeof auditRules>>, failOn: FailOn | null): boolean {
   if (!failOn) return false;
   if (failOn === "duplicate") return report.candidates.some((candidate) => candidate.recommendation === "remove_duplicate");
-  if (failOn === "risk") return report.candidates.some((candidate) => candidate.risks.length > 0);
+  if (failOn === "risk") return report.riskFindings.length > 0;
   if (failOn === "similar") return report.similarCandidates.length > 0;
   return report.candidates.some((candidate) => candidate.recommendation === "candidate");
 }

@@ -9,6 +9,7 @@ export {
   type AuditReport,
   type Occurrence,
   type Recommendation,
+  type RiskFinding,
   type RuleCandidate,
   type SimilarRecommendation,
   type SimilarRuleCandidate,
