@@ -27,8 +27,8 @@ export const riskRules: RiskRule[] = [
     label: "identity",
     patterns: [
       /\bpublic identity\b/i,
-      /\bidentity\b/i,
-      /\bHeznpc\b/i,
+      /\bidentity\s+(?:rule|rules|policy|must|should|is|only|surface|surfaces)\b/i,
+      /\bHeznpc\b.*\b(?:only|public|identity|author|external)\b/i,
       /\bcommit author\b/i,
       /\bsole author\b/i,
       /\bCo-Authored-By\b/i,
@@ -45,13 +45,16 @@ export const riskRules: RiskRule[] = [
       /\b(?:api|access|auth|bearer|secret)\s+token\b/i,
       /\baccount identifier\b/i,
       /\breference number\b/i,
-      /개인정보|이메일\s*(?:주소|계정)?|계정\s*식별자|토큰|API\s*키|시크릿|식별자/u,
+      /개인정보|이메일\s*(?:주소|계정)|계정\s*식별자|API\s*키|비밀\s*키|시크릿|(?:토큰|식별자).*(?:노출|공개|저장|포함|금지|마스킹|redact)/u,
     ],
   },
   {
     label: "approval_required",
     patterns: [
-      /\bapproval\b/i,
+      /\bexplicit approval\b/i,
+      /\bHITL approval\b/i,
+      /\bper-call approval\b/i,
+      /\bapproval\s+(?:gate|gated|required|requirement|each invocation)\b/i,
       /\bask before\b/i,
       /\bforce push\b/i,
       /\bhard reset\b/i,
@@ -66,9 +69,11 @@ export const riskRules: RiskRule[] = [
       /\bnpm\s+test\b/i,
       /\bpytest\b/i,
       /\b(?:actually\s+run|run|rerun|execute)\s+(?:the\s+)?(?:unit\s+|integration\s+|e2e\s+)?tests?\b/i,
+      /\brun\s+(?:the\s+)?(?:full\s+|complete\s+|entire\s+)?test\s+suite\b/i,
+      /\btest\s+suite\s+in\s+(?:CI|continuous integration)\b/i,
       /\b(?:CI|continuous integration)\s+(?:gate|check|status|workflow|run|pass|green)\b/i,
       /\bverification command\b/i,
-      /테스트|검증/u,
+      /(?:테스트|검증)\s*(?:명령|실행|통과|완료|결과|게이트|CI)|(?:실행|돌리|확인).{0,12}테스트/u,
     ],
   },
   {
@@ -105,13 +110,39 @@ export const riskRules: RiskRule[] = [
       /\bCVE\b/i,
       /\bvulnerability\b/i,
       /\bsecrets?\b/i,
+      /\b(?:validate|sanitize|escape)\s+(?:and\s+)?(?:sanitize\s+)?(?:all\s+)?user\s+input\b/i,
+      /\b(?:user\s+)?input\b.*\b(?:injection|xss|sql injection)\b/i,
+      /\b(?:prevent|avoid|block)\s+(?:path[-\s]?|sql\s+|command\s+|prompt\s+)?injection\b/i,
+      /\b(?:path[-\s]?|sql\s+|command\s+|prompt\s+)?injection\b.*\b(?:sanitiz(?:e|er|ation)|escape|validate)\b/i,
+      /\bsanitiz(?:e|er|ation)\b.*\b(?:path[-\s]?|sql\s+|command\s+|prompt\s+)?injection\b/i,
+      /\b(?:HMAC[-\s]chained\s+)?audit\s+(?:log|chain|entries?)\b/i,
+      /\bbypass(?:es|ing)?\s+(?:the\s+)?audit\s+chain\b/i,
       /\b(?:sandbox|filesystem|network|approval)\s+permissions?\b/i,
-      /보안|취약점|권한\s*(?:정책|승인|상승)|시크릿/u,
+      /보안\s*(?:정책|검토|게이트|규칙|요구사항)|취약점|권한\s*(?:정책|승인|상승)|시크릿|인젝션|입력\s*(?:검증|정제|필터링)/u,
     ],
   },
 ];
 
+const riskInventoryTerms = [
+  /\bidentity\b/i,
+  /\bPII\b/i,
+  /\bapproval\b/i,
+  /\btests?\b/i,
+  /\blogs?\b/i,
+  /\berrors?\b/i,
+  /\bsecurity\b/i,
+  /\bstrategy ratification\b/i,
+];
+
+function isRiskCategoryInventory(text: string): boolean {
+  if (!/\b(?:risk labels?|risk categories|high-risk rules?|high-risk labels?|risk rules?)\b/i.test(text)) return false;
+  if (!/\b(?:mention|mentions|include|includes|category|categories|label|labels|listed)\b/i.test(text)) return false;
+  const hits = riskInventoryTerms.filter((pattern) => pattern.test(text)).length;
+  return hits >= 4;
+}
+
 export function classifyRisks(text: string): RiskLabel[] {
+  if (isRiskCategoryInventory(text)) return [];
   const labels: RiskLabel[] = [];
   for (const rule of riskRules) {
     if (rule.patterns.some((pattern) => pattern.test(text))) {
