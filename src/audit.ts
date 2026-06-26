@@ -9,7 +9,7 @@ export interface Occurrence {
 }
 
 export type CacheHint = "stable_prefix_candidate" | "dynamic_task_or_local_context";
-export type Recommendation = "keep_explicit" | "remove_duplicate";
+export type Recommendation = "keep_explicit" | "remove_duplicate" | "review_duplicate";
 
 export interface RuleCandidate {
   id: string;
@@ -172,8 +172,15 @@ function uniqueRisks(risks: RiskLabel[]): RiskLabel[] {
   return [...new Set(risks)].sort((left, right) => left.localeCompare(right)) as RiskLabel[];
 }
 
-function recommendationFor(risks: RiskLabel[]): Recommendation {
-  return isHighRisk(risks) ? "keep_explicit" : "remove_duplicate";
+function hasSameFileRepeat(occurrences: Occurrence[]): boolean {
+  const counts = new Map<string, number>();
+  for (const occurrence of occurrences) counts.set(occurrence.path, (counts.get(occurrence.path) ?? 0) + 1);
+  return [...counts.values()].some((count) => count > 1);
+}
+
+function recommendationFor(risks: RiskLabel[], occurrences: Occurrence[]): Recommendation {
+  if (isHighRisk(risks)) return "keep_explicit";
+  return hasSameFileRepeat(occurrences) ? "remove_duplicate" : "review_duplicate";
 }
 
 function wordSet(text: string): Set<string> {
@@ -273,7 +280,7 @@ export async function auditDocuments(documents: AuditDocument[], options: AuditO
       occurrences,
       chars,
       risks,
-      recommendation: recommendationFor(risks),
+      recommendation: recommendationFor(risks, occurrences),
       cacheHint: cacheHintFor(occurrences),
     });
   }

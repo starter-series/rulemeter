@@ -6,12 +6,12 @@
     <title>RuleMeter</title>
     <meta
       name="description"
-      content="RuleMeter is a report-only advisory lint for duplicated and risky agent instruction rules."
+      content="RuleMeter is a report-only review aid for agent instruction drift and duplicate rules."
     />
     <meta property="og:title" content="RuleMeter" />
     <meta
       property="og:description"
-      content="A best-effort review aid for exact duplicates, keyword risk findings, and optional near-duplicate prompts."
+      content="A best-effort review aid for cross-file drift, same-file duplicates, keyword risk findings, and optional near-duplicate prompts."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://starter-series.github.io/rulemeter/" />
@@ -45,8 +45,8 @@
         <div class="hero-copy">
           <h1 data-i18n="hero.title">Review agent rules without pretending the lint is exhaustive.</h1>
           <p data-i18n="hero.body">
-            RuleMeter is a report-only advisory lint for duplicated instruction text, keyword-based risk findings,
-            and optional near-duplicate review prompts.
+            RuleMeter is a report-only review aid for agent instruction drift, same-file duplicates,
+            keyword-based risk findings, and optional near-duplicate review prompts.
           </p>
           <div class="actions">
             <a class="button primary" href="https://github.com/starter-series/rulemeter" data-i18n="hero.primary">View on GitHub</a>
@@ -66,7 +66,7 @@ risk findings: 6
 duplicate candidates: 4
 similar candidates: 7
 
-DUP_01 remove_duplicate low
+DUP_01 review_duplicate low
 risk: test_required</code></pre>
         </div>
       </section>
@@ -75,7 +75,7 @@ risk: test_required</code></pre>
         <div>
           <h2 data-i18n="workflow.title">Report first, rewrite never.</h2>
           <p data-i18n="workflow.body">
-            RuleMeter does not edit files. It gives maintainers evidence for what is duplicated, what can be removed,
+            RuleMeter does not edit files. It gives maintainers evidence for cross-file drift, same-file repetition,
             and what deserves review, while documenting that keyword risk findings are not safety guarantees.
           </p>
         </div>
@@ -103,7 +103,7 @@ risk: test_required</code></pre>
         <div class="signal-grid">
           <article>
             <h3 data-i18n="signals.duplicates.title">Exact duplicates</h3>
-            <p data-i18n="signals.duplicates.body">Shows exact repeated text that may be safe to remove after review.</p>
+            <p data-i18n="signals.duplicates.body">Separates same-file removal candidates from cross-file drift or parity prompts.</p>
           </article>
           <article>
             <h3 data-i18n="signals.risk.title">High-risk rules</h3>
@@ -115,7 +115,7 @@ risk: test_required</code></pre>
           </article>
           <article>
             <h3 data-i18n="signals.ci.title">CI tripwires</h3>
-            <p data-i18n="signals.ci.body">Fail on duplicates, risk findings, or experimental similar-rule findings.</p>
+            <p data-i18n="signals.ci.body">Fail on same-file duplicate removals, risk findings, or experimental similar-rule findings.</p>
           </article>
         </div>
       </section>

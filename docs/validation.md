@@ -57,7 +57,7 @@ After the first run, review findings by fingerprint and add labels:
   "labels": {
     "abc123def4567890": {
       "decision": "actionable",
-      "note": "Would remove the low-risk duplicate."
+      "note": "Would review the low-risk duplicate for drift or consolidation."
     }
   }
 }
@@ -78,4 +78,4 @@ Treat these as validation targets, not product claims:
 
 If the corpus does not produce actionable review decisions, keep RuleMeter private or absorb it as an internal helper instead of publishing it as a standalone package.
 
-RuleMeter should be positioned as an agent instruction drift and duplicate review aid. Do not market it as an AI safety/security linter, semantic prompt optimizer, or enforcement engine unless the implementation and corpus evidence change substantially.
+RuleMeter should be positioned as an agent instruction drift and duplicate review aid. Cross-file duplicates are review prompts, not deletion instructions. Do not market RuleMeter as an AI safety/security linter, semantic prompt optimizer, or enforcement engine unless the implementation and corpus evidence change substantially.

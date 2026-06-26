@@ -10,7 +10,7 @@ import { DISCOVERY_SCHEMA_VERSION, ERROR_SCHEMA_VERSION } from "./schema.js";
 const VERSION = "0.1.0";
 
 function help(): string {
-  return `rulemeter — best-effort advisory lint for agent instruction files.
+  return `rulemeter — best-effort review aid for agent instruction drift and duplicates.
 
 Usage
   rulemeter audit <file...> [--json] [--format table|markdown|json] [--fail-on duplicate|risk|similar] [--experimental-similar] [--similarity-threshold N] [--config PATH] [--preset NAME] [--list-files] [--min-chars N] [--min-repeats N]

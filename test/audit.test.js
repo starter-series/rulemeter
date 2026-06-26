@@ -28,6 +28,19 @@ test("repeated low-risk rule recommends duplicate removal", async () => {
   assert.equal(report.candidates[0].repeats, 2);
 });
 
+test("cross-file low-risk duplicate is a review prompt, not a removal instruction", async () => {
+  const text = "- Preserve the existing module boundaries and keep edits narrowly scoped to the requested behavior.";
+  const report = await auditDocuments(
+    [
+      { id: "AGENTS.md", text },
+      { id: "CLAUDE.md", text },
+    ],
+    { minChars: 5 },
+  );
+  assert.equal(report.candidates.length, 1);
+  assert.equal(report.candidates[0].recommendation, "review_duplicate");
+});
+
 test("generic authoring and strategy words do not trigger high-risk labels alone", () => {
   const labels = classifyRisks("Use a clear authoring strategy for small helper functions.");
   assert.deepEqual(labels, []);
