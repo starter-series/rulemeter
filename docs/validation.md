@@ -65,7 +65,7 @@ After the first run, review findings by fingerprint and add labels:
 
 Allowed decisions are `actionable`, `noise`, `unsafe`, `missed`, and `unreviewed`.
 
-Strict release validation expects every emitted report finding to be labeled. A partially labeled manifest still fails because aggregate usefulness can otherwise look healthy while unreviewed holdout findings remain hidden.
+Strict release validation expects every emitted report finding to be labeled. A partially labeled manifest still fails because aggregate usefulness can otherwise look healthy while unreviewed holdout findings remain hidden. Holdout usefulness is checked separately so calibration labels cannot mask a weak holdout split.
 
 ## Evidence Targets
 
@@ -77,6 +77,7 @@ Treat these as validation targets, not product claims:
 - duplicate usefulness rate near 80% after manual review
 - surface-overlap usefulness rate near 60% after manual review
 - risk-summary usefulness rate near 60% after manual review
+- holdout usefulness rates should also meet those thresholds
 - review item load below 20 report findings per 1,000 instruction lines
 - review burden below 20 underlying risk findings per 1,000 instruction lines
 

@@ -87,15 +87,36 @@ function locationText(occurrences) {
   return occurrences.map((occurrence) => `${occurrence.path}:${occurrence.line}`).join(", ");
 }
 
+function emptyDecisionCounts() {
+  return { actionable: 0, noise: 0, unsafe: 0, missed: 0, unreviewed: 0 };
+}
+
 function decisionCounts(findings) {
-  const counts = { actionable: 0, noise: 0, unsafe: 0, missed: 0, unreviewed: 0 };
+  const counts = emptyDecisionCounts();
   for (const finding of findings) counts[finding.decision] += 1;
+  return counts;
+}
+
+function decisionCountsBySplit(findings) {
+  const counts = {};
+  for (const finding of findings) {
+    counts[finding.split] ??= emptyDecisionCounts();
+    counts[finding.split][finding.decision] += 1;
+  }
   return counts;
 }
 
 function usefulRate(counts) {
   const reviewed = counts.actionable + counts.noise + counts.unsafe;
   return reviewed === 0 ? null : Number((counts.actionable / reviewed).toFixed(3));
+}
+
+function usefulRatesBySplit(countsBySplit) {
+  const rates = {};
+  for (const [split, counts] of Object.entries(countsBySplit)) {
+    rates[split] = usefulRate(counts);
+  }
+  return rates;
 }
 
 function labelCoverage(findings) {
@@ -211,7 +232,15 @@ function perKloc(count, totalLines) {
   return totalLines === 0 ? 0 : (count / totalLines) * 1000;
 }
 
-function corpusWarnings({ documents, roots, splitCounts, findings, labelStats, riskFindingCount, thresholds, totalLines, usefulRates }) {
+function addUsefulRateWarning(warnings, label, rate, threshold) {
+  if (rate === null || rate === undefined) {
+    warnings.push(`${label} useful rate is unavailable; no reviewed ${label} findings`);
+  } else if (rate < threshold) {
+    warnings.push(`${label} useful rate is ${rate}; target is at least ${threshold}`);
+  }
+}
+
+function corpusWarnings({ documents, roots, splitCounts, findings, labelStats, riskFindingCount, thresholds, totalLines, usefulRates, usefulRatesBySplit }) {
   const warnings = [];
   if (documents.length < thresholds.minDocuments) {
     warnings.push(`corpus has ${documents.length} documents; target is at least ${thresholds.minDocuments}`);
@@ -235,22 +264,19 @@ function corpusWarnings({ documents, roots, splitCounts, findings, labelStats, r
   if (riskPerKloc > thresholds.maxRiskFindingsPerKloc) {
     warnings.push(`risk finding load is ${riskPerKloc.toFixed(1)} per 1,000 lines; target is at most ${thresholds.maxRiskFindingsPerKloc}`);
   }
-  if (usefulRates.duplicate === null) {
-    warnings.push("duplicate useful rate is unavailable; no reviewed duplicate findings");
-  } else if (usefulRates.duplicate < thresholds.minDuplicateUsefulRate) {
-    warnings.push(`duplicate useful rate is ${usefulRates.duplicate}; target is at least ${thresholds.minDuplicateUsefulRate}`);
-  }
-  if (usefulRates.surfaceOverlap === null) {
-    warnings.push("surface overlap useful rate is unavailable; no reviewed surface-overlap findings");
-  } else if (usefulRates.surfaceOverlap < thresholds.minSurfaceOverlapUsefulRate) {
-    warnings.push(`surface overlap useful rate is ${usefulRates.surfaceOverlap}; target is at least ${thresholds.minSurfaceOverlapUsefulRate}`);
-  }
-  if (usefulRates.risk === null) {
-    warnings.push("risk useful rate is unavailable; no reviewed risk-summary findings");
-  } else if (usefulRates.risk < thresholds.minRiskUsefulRate) {
-    warnings.push(`risk useful rate is ${usefulRates.risk}; target is at least ${thresholds.minRiskUsefulRate}`);
+  addUsefulRateWarning(warnings, "duplicate", usefulRates.duplicate, thresholds.minDuplicateUsefulRate);
+  addUsefulRateWarning(warnings, "surface-overlap", usefulRates.surfaceOverlap, thresholds.minSurfaceOverlapUsefulRate);
+  addUsefulRateWarning(warnings, "risk-summary", usefulRates.risk, thresholds.minRiskUsefulRate);
+  if ((splitCounts.holdout ?? 0) > 0) {
+    addUsefulRateWarning(warnings, "holdout duplicate", usefulRatesBySplit.duplicate.holdout, thresholds.minDuplicateUsefulRate);
+    addUsefulRateWarning(warnings, "holdout surface-overlap", usefulRatesBySplit.surfaceOverlap.holdout, thresholds.minSurfaceOverlapUsefulRate);
+    addUsefulRateWarning(warnings, "holdout risk-summary", usefulRatesBySplit.risk.holdout, thresholds.minRiskUsefulRate);
   }
   return warnings;
+}
+
+function formatRate(rate) {
+  return rate === null || rate === undefined ? "n/a" : rate;
 }
 
 function markdownReport(payload) {
@@ -265,6 +291,9 @@ function markdownReport(payload) {
     `- reviewed findings: ${payload.metrics.labelCoverage.reviewed}/${payload.findings.length}`,
     `- review item load: ${payload.metrics.reviewItemsPerKloc} per 1,000 lines`,
     `- risk finding load: ${payload.metrics.riskFindingsPerKloc} per 1,000 lines`,
+    `- holdout duplicate useful rate: ${formatRate(payload.metrics.usefulRatesBySplit.duplicate.holdout)}`,
+    `- holdout surface-overlap useful rate: ${formatRate(payload.metrics.usefulRatesBySplit.surfaceOverlap.holdout)}`,
+    `- holdout risk-summary useful rate: ${formatRate(payload.metrics.usefulRatesBySplit.risk.holdout)}`,
     `- duplicate candidates: ${payload.metrics.byKind.duplicate}`,
     `- surface overlaps: ${payload.metrics.byKind.surfaceOverlap}`,
     `- risk findings: ${payload.metrics.byKind.risk}`,
@@ -339,11 +368,21 @@ async function buildPayload(options) {
   const surfaceOverlapCounts = decisionCounts(findings.filter((finding) => finding.kind === "surface_overlap"));
   const riskSummaryCounts = decisionCounts(findings.filter((finding) => finding.kind === "risk_summary"));
   const similarCounts = decisionCounts(findings.filter((finding) => finding.kind === "similar"));
+  const duplicateSplitCounts = decisionCountsBySplit(findings.filter((finding) => finding.kind === "duplicate"));
+  const surfaceOverlapSplitCounts = decisionCountsBySplit(findings.filter((finding) => finding.kind === "surface_overlap"));
+  const riskSummarySplitCounts = decisionCountsBySplit(findings.filter((finding) => finding.kind === "risk_summary"));
+  const similarSplitCounts = decisionCountsBySplit(findings.filter((finding) => finding.kind === "similar"));
   const usefulRates = {
     duplicate: usefulRate(duplicateCounts),
     surfaceOverlap: usefulRate(surfaceOverlapCounts),
     risk: usefulRate(riskSummaryCounts),
     similar: usefulRate(similarCounts),
+  };
+  const splitUsefulRates = {
+    duplicate: usefulRatesBySplit(duplicateSplitCounts),
+    surfaceOverlap: usefulRatesBySplit(surfaceOverlapSplitCounts),
+    risk: usefulRatesBySplit(riskSummarySplitCounts),
+    similar: usefulRatesBySplit(similarSplitCounts),
   };
   const labelStats = labelCoverage(findings);
   const payload = {
@@ -371,6 +410,12 @@ async function buildPayload(options) {
         risk: riskSummaryCounts,
         similar: similarCounts,
       },
+      decisionsBySplit: {
+        duplicate: duplicateSplitCounts,
+        surfaceOverlap: surfaceOverlapSplitCounts,
+        risk: riskSummarySplitCounts,
+        similar: similarSplitCounts,
+      },
       labelCoverage: labelStats,
       usefulRates: {
         duplicate: usefulRates.duplicate,
@@ -378,11 +423,23 @@ async function buildPayload(options) {
         risk: usefulRates.risk,
         similar: usefulRates.similar,
       },
+      usefulRatesBySplit: splitUsefulRates,
     },
     findings,
     warnings: [],
   };
-  payload.warnings = corpusWarnings({ documents, roots, splitCounts, findings, labelStats, riskFindingCount: report.riskFindings.length, thresholds, totalLines, usefulRates });
+  payload.warnings = corpusWarnings({
+    documents,
+    roots,
+    splitCounts,
+    findings,
+    labelStats,
+    riskFindingCount: report.riskFindings.length,
+    thresholds,
+    totalLines,
+    usefulRates,
+    usefulRatesBySplit: splitUsefulRates,
+  });
   return payload;
 }
 

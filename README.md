@@ -193,7 +193,7 @@ npm audit --audit-level=high
 
 ## Release Decision
 
-Do not publish the npm package or market RuleMeter as a standalone public tool until a private real-instruction corpus passes strict validation with every report finding manually labeled. The corpus should meet the evidence targets in `docs/validation.md`: same-file duplicate usefulness near 80%, surface-overlap usefulness near 60%, risk-summary usefulness near 60%, review item load at or below 20 report findings per 1,000 instruction lines, and risk load at or below 20 underlying risk findings per 1,000 instruction lines.
+Do not publish the npm package or market RuleMeter as a standalone public tool until a private real-instruction corpus passes strict validation with every report finding manually labeled and holdout usefulness measured separately. The corpus should meet the evidence targets in `docs/validation.md`: same-file duplicate usefulness near 80%, surface-overlap usefulness near 60%, risk-summary usefulness near 60%, review item load at or below 20 report findings per 1,000 instruction lines, and risk load at or below 20 underlying risk findings per 1,000 instruction lines.
 
 If those targets do not hold, keep RuleMeter private or absorb it into `create-starter audit-agent-rules` as an internal helper instead of publishing it as a standalone package.
 
