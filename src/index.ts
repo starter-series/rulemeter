@@ -13,6 +13,9 @@ export {
   type RuleCandidate,
   type SimilarRecommendation,
   type SimilarRuleCandidate,
+  type SurfaceOverlap,
+  type SurfaceOverlapExample,
+  type SurfaceOverlapRecommendation,
 } from "./audit.js";
 export { loadRulemeterConfig, loadRulemeterConfigWithMeta, type LoadedRulemeterConfig, type RulemeterConfig } from "./config.js";
 export { RulemeterError } from "./errors.js";

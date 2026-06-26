@@ -73,9 +73,10 @@ Treat these as validation targets, not product claims:
 - at least 4 distinct roots
 - at least one locked holdout split
 - duplicate usefulness rate near 80% after manual review
+- surface-overlap usefulness rate near 60% after manual review
 - risk finding usefulness rate near 60% after manual review
 - review burden below 20 risk findings per 1,000 instruction lines
 
 If the corpus does not produce actionable review decisions, keep RuleMeter private or absorb it as an internal helper instead of publishing it as a standalone package.
 
-RuleMeter should be positioned as an agent instruction drift and duplicate review aid. Cross-file duplicates are review prompts, not deletion instructions. Do not market RuleMeter as an AI safety/security linter, semantic prompt optimizer, or enforcement engine unless the implementation and corpus evidence change substantially.
+RuleMeter should be positioned as an agent instruction drift and duplicate review aid. Same-file duplicates are deletion candidates; cross-file surface overlaps are review prompts, not deletion instructions. Do not market RuleMeter as an AI safety/security linter, semantic prompt optimizer, or enforcement engine unless the implementation and corpus evidence change substantially.

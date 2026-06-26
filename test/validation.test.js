@@ -24,7 +24,11 @@ async function corpusFixture() {
     ].join("\n"),
     "utf8",
   );
-  await writeFile(join(repoB, "CLAUDE.md"), "- Ask before destructive operations.\n", "utf8");
+  await writeFile(
+    join(repoB, "CLAUDE.md"),
+    ["- Preserve existing module boundaries and keep edits narrowly scoped to requested behavior.", "- Ask before destructive operations."].join("\n"),
+    "utf8",
+  );
   const manifestPath = join(dir, "corpus.json");
   await writeFile(
     manifestPath,
@@ -57,6 +61,7 @@ test("corpus validation emits fingerprinted JSON without raw text by default", a
   assert.equal(payload.corpus.documents, 2);
   assert.equal(payload.corpus.roots, 2);
   assert.equal(payload.metrics.byKind.duplicate, 1);
+  assert.equal(payload.metrics.byKind.surfaceOverlap, 1);
   assert.equal(payload.metrics.byKind.risk, 2);
   assert.ok(payload.findings.every((finding) => typeof finding.fingerprint === "string"));
   assert.ok(payload.findings.every((finding) => !("text" in finding)));
@@ -72,4 +77,5 @@ test("corpus validation can include local text for private review", async () => 
   const payload = JSON.parse(stdout);
 
   assert.ok(payload.findings.some((finding) => "text" in finding));
+  assert.ok(payload.findings.some((finding) => Array.isArray(finding.exampleTexts)));
 });

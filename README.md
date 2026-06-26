@@ -8,7 +8,8 @@ Website: https://starter-series.github.io/rulemeter/
 
 It helps maintainers review:
 
-- exact duplicated instruction text
+- same-file duplicated instruction text
+- cross-file surface overlaps that may indicate drift or intentional parity
 - keyword-based review prompts that may deserve human attention
 - optional lexical near-duplicate drift candidates
 
@@ -63,6 +64,8 @@ Machine-readable output includes a stable `schemaVersion`:
 
 `riskFindings` lists keyword-based risk matches independently from duplicate candidates, so `--fail-on risk` can catch single-stated rules. This is still best-effort and non-exhaustive.
 
+`surfaceOverlaps` summarizes exact cross-file overlaps by the set of files that share text. These are review prompts for drift, parity, or consolidation, not deletion instructions.
+
 Errors use `rulemeter.error.v1` and stable `error.code` values for automation. Common user-facing codes include `NO_FILES_FOUND`, `FILE_NOT_FOUND`, `NOT_A_FILE`, `CONFIG_NOT_FOUND`, `CONFIG_INVALID_JSON`, `CONFIG_INVALID`, `INVALID_OPTION`, `UNKNOWN_FLAG`, and `UNKNOWN_COMMAND`.
 
 ## Reports And CI Tripwires
@@ -83,7 +86,7 @@ rulemeter audit --preset all --experimental-similar --fail-on similar
 
 | Gate | Fails when |
 |---|---|
-| `duplicate` | At least one exact duplicate candidate recommends `remove_duplicate` for same-file repetition. Cross-file `review_duplicate` findings are report-only. |
+| `duplicate` | At least one same-file exact duplicate candidate recommends `remove_duplicate`. Cross-file `surfaceOverlaps` are report-only. |
 | `risk` | At least one best-effort risk finding was found. |
 | `similar` | At least one experimental similar-rule candidate was found. |
 
@@ -139,7 +142,7 @@ When a config file is loaded, table output prints `config: <path>` and JSON outp
 | Recommendation | Meaning |
 |---|---|
 | `remove_duplicate` | Low-risk exact duplicate text repeats inside the same file and appears safe enough to review for deletion. |
-| `review_duplicate` | Low-risk exact duplicate text appears across files or agent surfaces. Review for drift, parity, or consolidation; do not treat it as a safe deletion instruction. |
+| `review_duplicate` | Cross-file exact overlap appears in `surfaceOverlaps`. Review for drift, parity, or consolidation; do not treat it as a safe deletion instruction. |
 | `keep_explicit` | The text matched a risk label, so duplicate removal should be reviewed carefully. |
 
 ## Risk Labels
@@ -166,8 +169,8 @@ These are important safety rules, but the current keyword lint may not flag them
 
 ## Limits
 
-- RuleMeter's default duplicate recommendations only group exact normalized duplicate text.
-- Cross-file duplicates are review prompts because different agents may need explicit parallel instructions.
+- RuleMeter's default duplicate recommendations only group exact normalized same-file duplicate text.
+- Cross-file duplicate text is summarized as `surfaceOverlaps` because different agents may need explicit parallel instructions.
 - Experimental similar-rule detection uses lexical overlap and is off by default. Treat `similarCandidates` as review prompts, not proof of semantic equivalence.
 - Risk findings are keyword-based and non-exhaustive; they can produce both false positives and false negatives.
 - Markdown code fences, tables, blockquotes, and indented code are skipped; RuleMeter focuses on prose/list instruction text.
@@ -190,7 +193,7 @@ npm audit --audit-level=high
 
 ## Release Decision
 
-Do not publish the npm package or market RuleMeter as a standalone public tool until a private real-instruction corpus passes strict validation. The corpus should meet the evidence targets in `docs/validation.md`: duplicate usefulness near 80%, risk-finding usefulness near 60%, and review burden at or below 20 risk findings per 1,000 instruction lines.
+Do not publish the npm package or market RuleMeter as a standalone public tool until a private real-instruction corpus passes strict validation. The corpus should meet the evidence targets in `docs/validation.md`: same-file duplicate usefulness near 80%, surface-overlap usefulness near 60%, risk-finding usefulness near 60%, and review burden at or below 20 risk findings per 1,000 instruction lines.
 
 If those targets do not hold, keep RuleMeter private or absorb it into `create-starter audit-agent-rules` as an internal helper instead of publishing it as a standalone package.
 
