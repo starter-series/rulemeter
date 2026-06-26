@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -66,10 +66,13 @@ test("corpus validation emits fingerprinted JSON without raw text by default", a
   assert.equal(payload.metrics.byKind.surfaceOverlap, 1);
   assert.equal(payload.metrics.byKind.risk, 2);
   assert.equal(payload.metrics.byKind.riskSummary, 2);
+  assert.equal(payload.metrics.labelCoverage.reviewed, 0);
+  assert.equal(payload.metrics.labelCoverage.unreviewed, payload.findings.length);
   assert.ok(payload.findings.some((finding) => finding.kind === "risk_summary"));
   assert.ok(payload.findings.every((finding) => finding.kind !== "risk"));
   assert.ok(payload.findings.every((finding) => typeof finding.fingerprint === "string"));
   assert.ok(payload.findings.every((finding) => !("text" in finding)));
+  assert.ok(payload.warnings.some((warning) => warning.includes("duplicate useful rate is unavailable")));
 });
 
 test("corpus validation can include local text for private review", async () => {
@@ -83,4 +86,33 @@ test("corpus validation can include local text for private review", async () => 
 
   assert.ok(payload.findings.some((finding) => "text" in finding));
   assert.ok(payload.findings.some((finding) => Array.isArray(finding.exampleTexts)));
+});
+
+test("strict corpus validation rejects partially labeled findings", async () => {
+  const manifest = await corpusFixture();
+  const { stdout } = await execFileAsync(process.execPath, ["scripts/validate-corpus.mjs", "--manifest", manifest, "--format", "json"], {
+    cwd: process.cwd(),
+  });
+  const payload = JSON.parse(stdout);
+  const manifestJson = JSON.parse(await readFile(manifest, "utf8"));
+  manifestJson.labels = {
+    [payload.findings[0].fingerprint]: {
+      decision: "actionable",
+      note: "Reviewed one finding only.",
+    },
+  };
+  await writeFile(manifest, JSON.stringify(manifestJson, null, 2), "utf8");
+
+  await assert.rejects(
+    execFileAsync(process.execPath, ["scripts/validate-corpus.mjs", "--manifest", manifest, "--format", "json", "--strict"], {
+      cwd: process.cwd(),
+    }),
+    (error) => {
+      assert.equal(error.code, 1);
+      const strictPayload = JSON.parse(error.stdout);
+      assert.equal(strictPayload.metrics.labelCoverage.reviewed, 1);
+      assert.ok(strictPayload.warnings.some((warning) => warning.includes("findings remain unreviewed")));
+      return true;
+    },
+  );
 });

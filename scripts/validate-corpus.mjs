@@ -98,6 +98,16 @@ function usefulRate(counts) {
   return reviewed === 0 ? null : Number((counts.actionable / reviewed).toFixed(3));
 }
 
+function labelCoverage(findings) {
+  const unreviewed = findings.filter((finding) => finding.decision === "unreviewed").length;
+  const reviewed = findings.length - unreviewed;
+  return {
+    reviewed,
+    unreviewed,
+    reviewedRate: findings.length === 0 ? null : Number((reviewed / findings.length).toFixed(3)),
+  };
+}
+
 function decorateDuplicate(candidate, splitById, labels, includeText) {
   const id = fingerprint({ kind: "duplicate", text: candidate.text, recommendation: candidate.recommendation, risks: candidate.risks });
   const label = labels.get(id) ?? { decision: "unreviewed", note: "" };
@@ -201,7 +211,7 @@ function perKloc(count, totalLines) {
   return totalLines === 0 ? 0 : (count / totalLines) * 1000;
 }
 
-function corpusWarnings({ documents, roots, splitCounts, findings, riskFindingCount, thresholds, totalLines, usefulRates }) {
+function corpusWarnings({ documents, roots, splitCounts, findings, labelStats, riskFindingCount, thresholds, totalLines, usefulRates }) {
   const warnings = [];
   if (documents.length < thresholds.minDocuments) {
     warnings.push(`corpus has ${documents.length} documents; target is at least ${thresholds.minDocuments}`);
@@ -210,7 +220,13 @@ function corpusWarnings({ documents, roots, splitCounts, findings, riskFindingCo
     warnings.push(`corpus has ${roots.size} roots; target is at least ${thresholds.minRoots}`);
   }
   if ((splitCounts.holdout ?? 0) === 0) warnings.push("corpus has no holdout documents");
-  if (findings.every((finding) => finding.decision === "unreviewed")) warnings.push("findings have no manual labels yet");
+  if (findings.length === 0) {
+    warnings.push("corpus produced no report findings; usefulness cannot be assessed");
+  } else if (labelStats.unreviewed === findings.length) {
+    warnings.push("findings have no manual labels yet");
+  } else if (labelStats.unreviewed > 0) {
+    warnings.push(`${labelStats.unreviewed} findings remain unreviewed; strict release validation requires all findings to be labeled`);
+  }
   const reviewItemsPerKloc = perKloc(findings.length, totalLines);
   if (reviewItemsPerKloc > thresholds.maxReviewItemsPerKloc) {
     warnings.push(`review item load is ${reviewItemsPerKloc.toFixed(1)} per 1,000 lines; target is at most ${thresholds.maxReviewItemsPerKloc}`);
@@ -219,13 +235,19 @@ function corpusWarnings({ documents, roots, splitCounts, findings, riskFindingCo
   if (riskPerKloc > thresholds.maxRiskFindingsPerKloc) {
     warnings.push(`risk finding load is ${riskPerKloc.toFixed(1)} per 1,000 lines; target is at most ${thresholds.maxRiskFindingsPerKloc}`);
   }
-  if (usefulRates.duplicate !== null && usefulRates.duplicate < thresholds.minDuplicateUsefulRate) {
+  if (usefulRates.duplicate === null) {
+    warnings.push("duplicate useful rate is unavailable; no reviewed duplicate findings");
+  } else if (usefulRates.duplicate < thresholds.minDuplicateUsefulRate) {
     warnings.push(`duplicate useful rate is ${usefulRates.duplicate}; target is at least ${thresholds.minDuplicateUsefulRate}`);
   }
-  if (usefulRates.surfaceOverlap !== null && usefulRates.surfaceOverlap < thresholds.minSurfaceOverlapUsefulRate) {
+  if (usefulRates.surfaceOverlap === null) {
+    warnings.push("surface overlap useful rate is unavailable; no reviewed surface-overlap findings");
+  } else if (usefulRates.surfaceOverlap < thresholds.minSurfaceOverlapUsefulRate) {
     warnings.push(`surface overlap useful rate is ${usefulRates.surfaceOverlap}; target is at least ${thresholds.minSurfaceOverlapUsefulRate}`);
   }
-  if (usefulRates.risk !== null && usefulRates.risk < thresholds.minRiskUsefulRate) {
+  if (usefulRates.risk === null) {
+    warnings.push("risk useful rate is unavailable; no reviewed risk-summary findings");
+  } else if (usefulRates.risk < thresholds.minRiskUsefulRate) {
     warnings.push(`risk useful rate is ${usefulRates.risk}; target is at least ${thresholds.minRiskUsefulRate}`);
   }
   return warnings;
@@ -240,6 +262,7 @@ function markdownReport(payload) {
     `- documents: ${payload.corpus.documents}`,
     `- roots: ${payload.corpus.roots}`,
     `- lines: ${payload.corpus.lines}`,
+    `- reviewed findings: ${payload.metrics.labelCoverage.reviewed}/${payload.findings.length}`,
     `- review item load: ${payload.metrics.reviewItemsPerKloc} per 1,000 lines`,
     `- risk finding load: ${payload.metrics.riskFindingsPerKloc} per 1,000 lines`,
     `- duplicate candidates: ${payload.metrics.byKind.duplicate}`,
@@ -322,6 +345,7 @@ async function buildPayload(options) {
     risk: usefulRate(riskSummaryCounts),
     similar: usefulRate(similarCounts),
   };
+  const labelStats = labelCoverage(findings);
   const payload = {
     schemaVersion: "rulemeter.validation.v1",
     manifestPath: loaded.path,
@@ -347,6 +371,7 @@ async function buildPayload(options) {
         risk: riskSummaryCounts,
         similar: similarCounts,
       },
+      labelCoverage: labelStats,
       usefulRates: {
         duplicate: usefulRates.duplicate,
         surfaceOverlap: usefulRates.surfaceOverlap,
@@ -357,7 +382,7 @@ async function buildPayload(options) {
     findings,
     warnings: [],
   };
-  payload.warnings = corpusWarnings({ documents, roots, splitCounts, findings, riskFindingCount: report.riskFindings.length, thresholds, totalLines, usefulRates });
+  payload.warnings = corpusWarnings({ documents, roots, splitCounts, findings, labelStats, riskFindingCount: report.riskFindings.length, thresholds, totalLines, usefulRates });
   return payload;
 }
 
