@@ -83,7 +83,7 @@ rulemeter audit --preset all --experimental-similar --fail-on similar
 
 | Gate | Fails when |
 |---|---|
-| `duplicate` | At least one exact duplicate candidate recommends `remove_duplicate`. |
+| `duplicate` | At least one exact duplicate candidate recommends `remove_duplicate` for same-file repetition. Cross-file `review_duplicate` findings are report-only. |
 | `risk` | At least one best-effort risk finding was found. |
 | `similar` | At least one experimental similar-rule candidate was found. |
 
@@ -138,7 +138,8 @@ When a config file is loaded, table output prints `config: <path>` and JSON outp
 
 | Recommendation | Meaning |
 |---|---|
-| `remove_duplicate` | Exact duplicate text was found and appears safe enough to review for deletion. |
+| `remove_duplicate` | Low-risk exact duplicate text repeats inside the same file and appears safe enough to review for deletion. |
+| `review_duplicate` | Low-risk exact duplicate text appears across files or agent surfaces. Review for drift, parity, or consolidation; do not treat it as a safe deletion instruction. |
 | `keep_explicit` | The text matched a risk label, so duplicate removal should be reviewed carefully. |
 
 ## Risk Labels
@@ -166,6 +167,7 @@ These are important safety rules, but the current keyword lint may not flag them
 ## Limits
 
 - RuleMeter's default duplicate recommendations only group exact normalized duplicate text.
+- Cross-file duplicates are review prompts because different agents may need explicit parallel instructions.
 - Experimental similar-rule detection uses lexical overlap and is off by default. Treat `similarCandidates` as review prompts, not proof of semantic equivalence.
 - Risk findings are keyword-based and non-exhaustive; they can produce both false positives and false negatives.
 - Markdown code fences, tables, blockquotes, and indented code are skipped; RuleMeter focuses on prose/list instruction text.

@@ -64,6 +64,23 @@ test("CLI fail-on duplicate exits non-zero after printing report", async () => {
   );
 });
 
+test("CLI fail-on duplicate ignores cross-file review-only duplicates", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "rulemeter-review-duplicate-test-"));
+  const text = "- Preserve the existing module boundaries and keep edits narrowly scoped to the requested behavior.";
+  await writeFile(join(dir, "AGENTS.md"), `${text}\n`, "utf8");
+  await writeFile(join(dir, "CLAUDE.md"), `${text}\n`, "utf8");
+
+  const { stdout, stderr } = await execFileAsync(
+    process.execPath,
+    ["dist/cli.js", "audit", join(dir, "AGENTS.md"), join(dir, "CLAUDE.md"), "--json", "--min-chars", "5", "--fail-on", "duplicate"],
+    { cwd: process.cwd() },
+  );
+  const payload = JSON.parse(stdout);
+  assert.equal(stderr, "");
+  assert.equal(payload.candidates.length, 1);
+  assert.equal(payload.candidates[0].recommendation, "review_duplicate");
+});
+
 test("CLI fail-on risk uses risk findings outside duplicate candidates", async () => {
   const dir = await mkdtemp(join(tmpdir(), "rulemeter-risk-test-"));
   const path = join(dir, "AGENTS.md");
@@ -272,7 +289,7 @@ test("CLI preset discovers Codex instruction files", async () => {
   assert.equal(payload.preset, "codex");
   assert.deepEqual(payload.discoveredFiles, ["AGENTS.md", "packages/app/AGENTS.md"]);
   assert.deepEqual(payload.files, ["AGENTS.md", "packages/app/AGENTS.md"]);
-  assert.equal(payload.candidates[0].recommendation, "remove_duplicate");
+  assert.equal(payload.candidates[0].recommendation, "review_duplicate");
 });
 
 test("CLI list-files JSON reports all preset discovery", async () => {
