@@ -15,7 +15,7 @@ node scripts/validate-corpus.mjs --manifest /path/to/private-corpus.json --forma
 
 Use `--include-text` only for local review artifacts that will not be published.
 
-Use `--strict` when the manifest should fail CI if validation warnings remain. Strict mode exits non-zero for warnings such as too few documents, too few roots, missing holdout files, any unlabeled report findings, or usefulness targets that cannot be measured from reviewed labels.
+Use `--strict` when the manifest should fail CI if validation warnings remain. Strict mode exits non-zero for warnings such as too few documents, too few roots, missing holdout files, any unlabeled report findings, stale labels, or usefulness targets that cannot be measured from reviewed labels.
 
 ## CI Smoke Vs Release Evidence
 
@@ -65,7 +65,7 @@ After the first run, review findings by fingerprint and add labels:
 
 Allowed decisions are `actionable`, `noise`, `unsafe`, `missed`, and `unreviewed`.
 
-Strict release validation expects every emitted report finding to be labeled. A partially labeled manifest still fails because aggregate usefulness can otherwise look healthy while unreviewed holdout findings remain hidden. Holdout usefulness is checked separately so calibration labels cannot mask a weak holdout split.
+Strict release validation expects every emitted report finding to be labeled. A partially labeled manifest still fails because aggregate usefulness can otherwise look healthy while unreviewed holdout findings remain hidden. Stale labels also fail because old fingerprints can make a private review file look more complete than it is. Holdout usefulness is checked separately so calibration labels cannot mask a weak holdout split.
 
 ## Evidence Targets
 

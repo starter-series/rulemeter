@@ -119,12 +119,13 @@ function usefulRatesBySplit(countsBySplit) {
   return rates;
 }
 
-function labelCoverage(findings) {
+function labelCoverage(findings, staleLabels) {
   const unreviewed = findings.filter((finding) => finding.decision === "unreviewed").length;
   const reviewed = findings.length - unreviewed;
   return {
     reviewed,
     unreviewed,
+    stale: staleLabels.length,
     reviewedRate: findings.length === 0 ? null : Number((reviewed / findings.length).toFixed(3)),
   };
 }
@@ -240,7 +241,7 @@ function addUsefulRateWarning(warnings, label, rate, threshold) {
   }
 }
 
-function corpusWarnings({ documents, roots, splitCounts, findings, labelStats, riskFindingCount, thresholds, totalLines, usefulRates, usefulRatesBySplit }) {
+function corpusWarnings({ documents, roots, splitCounts, findings, labelStats, riskFindingCount, staleLabels, thresholds, totalLines, usefulRates, usefulRatesBySplit }) {
   const warnings = [];
   if (documents.length < thresholds.minDocuments) {
     warnings.push(`corpus has ${documents.length} documents; target is at least ${thresholds.minDocuments}`);
@@ -255,6 +256,9 @@ function corpusWarnings({ documents, roots, splitCounts, findings, labelStats, r
     warnings.push("findings have no manual labels yet");
   } else if (labelStats.unreviewed > 0) {
     warnings.push(`${labelStats.unreviewed} findings remain unreviewed; strict release validation requires all findings to be labeled`);
+  }
+  if (staleLabels.length > 0) {
+    warnings.push(`${staleLabels.length} labels do not match current findings; refresh or remove stale labels`);
   }
   const reviewItemsPerKloc = perKloc(findings.length, totalLines);
   if (reviewItemsPerKloc > thresholds.maxReviewItemsPerKloc) {
@@ -289,6 +293,7 @@ function markdownReport(payload) {
     `- roots: ${payload.corpus.roots}`,
     `- lines: ${payload.corpus.lines}`,
     `- reviewed findings: ${payload.metrics.labelCoverage.reviewed}/${payload.findings.length}`,
+    `- stale labels: ${payload.metrics.labelCoverage.stale}`,
     `- review item load: ${payload.metrics.reviewItemsPerKloc} per 1,000 lines`,
     `- risk finding load: ${payload.metrics.riskFindingsPerKloc} per 1,000 lines`,
     `- holdout duplicate useful rate: ${formatRate(payload.metrics.usefulRatesBySplit.duplicate.holdout)}`,
@@ -384,7 +389,9 @@ async function buildPayload(options) {
     risk: usefulRatesBySplit(riskSummarySplitCounts),
     similar: usefulRatesBySplit(similarSplitCounts),
   };
-  const labelStats = labelCoverage(findings);
+  const findingFingerprints = new Set(findings.map((finding) => finding.fingerprint));
+  const staleLabels = [...labels.keys()].filter((label) => !findingFingerprints.has(label)).sort();
+  const labelStats = labelCoverage(findings, staleLabels);
   const payload = {
     schemaVersion: "rulemeter.validation.v1",
     manifestPath: loaded.path,
@@ -426,6 +433,7 @@ async function buildPayload(options) {
       usefulRatesBySplit: splitUsefulRates,
     },
     findings,
+    staleLabels,
     warnings: [],
   };
   payload.warnings = corpusWarnings({
@@ -435,6 +443,7 @@ async function buildPayload(options) {
     findings,
     labelStats,
     riskFindingCount: report.riskFindings.length,
+    staleLabels,
     thresholds,
     totalLines,
     usefulRates,
