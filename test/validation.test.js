@@ -21,6 +21,7 @@ async function corpusFixture() {
       "- Preserve existing module boundaries and keep edits narrowly scoped to requested behavior.",
       "- Preserve existing module boundaries and keep edits narrowly scoped to requested behavior.",
       "- Actually run tests before claiming success.",
+      "- Never paste production secrets into chat.",
     ].join("\n"),
     "utf8",
   );
@@ -64,8 +65,9 @@ test("corpus validation emits fingerprinted JSON without raw text by default", a
   assert.equal(typeof payload.metrics.riskFindingsPerKloc, "number");
   assert.equal(payload.metrics.byKind.duplicate, 1);
   assert.equal(payload.metrics.byKind.surfaceOverlap, 1);
-  assert.equal(payload.metrics.byKind.risk, 2);
-  assert.equal(payload.metrics.byKind.riskSummary, 2);
+  assert.equal(payload.metrics.byKind.risk, 3);
+  assert.equal(payload.metrics.byKind.riskSummary, 3);
+  assert.equal(typeof payload.metrics.usefulRatesBySplit.risk, "object");
   assert.equal(payload.metrics.labelCoverage.reviewed, 0);
   assert.equal(payload.metrics.labelCoverage.unreviewed, payload.findings.length);
   assert.ok(payload.findings.some((finding) => finding.kind === "risk_summary"));
@@ -73,6 +75,39 @@ test("corpus validation emits fingerprinted JSON without raw text by default", a
   assert.ok(payload.findings.every((finding) => typeof finding.fingerprint === "string"));
   assert.ok(payload.findings.every((finding) => !("text" in finding)));
   assert.ok(payload.warnings.some((warning) => warning.includes("duplicate useful rate is unavailable")));
+});
+
+test("strict corpus validation rejects weak holdout usefulness even when aggregate passes", async () => {
+  const manifest = await corpusFixture();
+  const { stdout } = await execFileAsync(process.execPath, ["scripts/validate-corpus.mjs", "--manifest", manifest, "--format", "json"], {
+    cwd: process.cwd(),
+  });
+  const payload = JSON.parse(stdout);
+  const manifestJson = JSON.parse(await readFile(manifest, "utf8"));
+  manifestJson.labels = Object.fromEntries(
+    payload.findings.map((finding) => [
+      finding.fingerprint,
+      {
+        decision: finding.kind === "risk_summary" && finding.split === "holdout" ? "noise" : "actionable",
+        note: "Synthetic review label.",
+      },
+    ]),
+  );
+  await writeFile(manifest, JSON.stringify(manifestJson, null, 2), "utf8");
+
+  await assert.rejects(
+    execFileAsync(process.execPath, ["scripts/validate-corpus.mjs", "--manifest", manifest, "--format", "json", "--strict"], {
+      cwd: process.cwd(),
+    }),
+    (error) => {
+      assert.equal(error.code, 1);
+      const strictPayload = JSON.parse(error.stdout);
+      assert.equal(strictPayload.metrics.usefulRates.risk, 0.667);
+      assert.equal(strictPayload.metrics.usefulRatesBySplit.risk.holdout, 0);
+      assert.ok(strictPayload.warnings.some((warning) => warning.includes("holdout risk-summary useful rate is 0")));
+      return true;
+    },
+  );
 });
 
 test("corpus validation can include local text for private review", async () => {
