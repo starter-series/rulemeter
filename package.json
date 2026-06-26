@@ -17,7 +17,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc && node scripts/mark-bin-executable.mjs",
+    "build": "node scripts/clean-dist.mjs && tsc && node scripts/mark-bin-executable.mjs",
     "test": "npm run build && node --test test/*.test.js",
     "dogfood": "npm run build && node dist/cli.js audit fixtures/AGENTS.md fixtures/CLAUDE.md fixtures/task.txt",
     "pack:check": "npm run build && node scripts/check-pack.mjs",

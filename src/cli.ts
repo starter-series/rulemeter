@@ -77,6 +77,12 @@ function parseAuditFormat(value: string, json: boolean): AuditFormat {
   throw new CliError("INVALID_OPTION", "--format must be one of: table, markdown, json");
 }
 
+function wantsJsonOutput(argv: readonly string[]): boolean {
+  if (argv.includes("--json")) return true;
+  const formatIndex = argv.indexOf("--format");
+  return formatIndex !== -1 && argv[formatIndex + 1] === "json";
+}
+
 function parseFailOn(value: string): FailOn | null {
   if (!value) return null;
   if (value === "duplicate" || value === "risk" || value === "similar") return value;
@@ -155,7 +161,7 @@ async function run(argv: string[]): Promise<number> {
         preset: preset || null,
         files,
       };
-      if (json) {
+      if (format === "json") {
         console.log(JSON.stringify(payload, null, 2));
       } else {
         if (loadedConfig.path) console.log(`config: ${loadedConfig.path}`);
@@ -207,7 +213,7 @@ run(process.argv.slice(2)).then(
   },
   (error: unknown) => {
     const payload = errorPayload(error);
-    if (process.argv.slice(2).includes("--json")) {
+    if (wantsJsonOutput(process.argv.slice(2))) {
       console.error(JSON.stringify(payload, null, 2));
     } else {
       console.error(`rulemeter: ${payload.error.message}`);
