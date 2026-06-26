@@ -60,6 +60,8 @@ test("corpus validation emits fingerprinted JSON without raw text by default", a
   assert.equal(payload.schemaVersion, "rulemeter.validation.v1");
   assert.equal(payload.corpus.documents, 2);
   assert.equal(payload.corpus.roots, 2);
+  assert.equal(typeof payload.metrics.reviewItemsPerKloc, "number");
+  assert.equal(typeof payload.metrics.riskFindingsPerKloc, "number");
   assert.equal(payload.metrics.byKind.duplicate, 1);
   assert.equal(payload.metrics.byKind.surfaceOverlap, 1);
   assert.equal(payload.metrics.byKind.risk, 2);
