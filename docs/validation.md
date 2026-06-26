@@ -10,11 +10,18 @@ The validation harness reads a local manifest of real instruction files, runs Ru
 npm run validate:corpus
 node scripts/validate-corpus.mjs --manifest validation/corpus.example.json --format markdown
 node scripts/validate-corpus.mjs --manifest /path/to/private-corpus.json --format json --out validation-result.json
+node scripts/validate-corpus.mjs --manifest /path/to/private-corpus.json --format markdown --strict
 ```
 
 Use `--include-text` only for local review artifacts that will not be published.
 
 Use `--strict` when the manifest should fail CI if validation warnings remain. Strict mode exits non-zero for warnings such as too few documents, too few roots, missing holdout files, or unlabeled findings.
+
+## CI Smoke Vs Release Evidence
+
+`npm run validate:corpus` intentionally uses `validation/corpus.example.json` without `--strict`. It belongs in CI as a smoke test so the validation harness does not rot.
+
+Standalone release evidence must come from a private manifest of owned real instruction files run with `--strict`. Do not use the example corpus as a product-readiness signal.
 
 ## Manifest
 
@@ -70,3 +77,5 @@ Treat these as validation targets, not product claims:
 - review burden below 20 risk findings per 1,000 instruction lines
 
 If the corpus does not produce actionable review decisions, keep RuleMeter private or absorb it as an internal helper instead of publishing it as a standalone package.
+
+RuleMeter should be positioned as an agent instruction drift and duplicate review aid. Do not market it as an AI safety/security linter, semantic prompt optimizer, or enforcement engine unless the implementation and corpus evidence change substantially.

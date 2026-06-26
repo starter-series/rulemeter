@@ -2,17 +2,17 @@
 
 > Status: Lab — standalone validation before possible `create-starter audit-agent-rules` absorption.
 
-`RuleMeter` is a report-only advisory lint for agent instruction files such as `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and Copilot instruction files.
+`RuleMeter` is a report-only review aid for agent instruction drift and duplicate text in files such as `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and Copilot instruction files.
 
 Website: https://starter-series.github.io/rulemeter/
 
 It helps maintainers review:
 
 - exact duplicated instruction text
-- risky instruction wording that may deserve human review
-- optional lexical near-duplicate candidates
+- keyword-based review prompts that may deserve human attention
+- optional lexical near-duplicate drift candidates
 
-It does not rewrite files, compress prompts, guarantee safety coverage, or prove that an instruction set is secure. Treat the report as a review aid, not an enforcement engine.
+It does not rewrite files, compress prompts, guarantee safety coverage, prove that an instruction set is secure, or replace a human review. Treat the report as a review aid, not an AI safety/security linter or enforcement engine.
 
 ## Install
 
@@ -184,7 +184,13 @@ npm audit --audit-level=high
 
 `smoke:install` packs the current checkout into a local tarball, installs that tarball in a temporary consumer project with package lifecycle scripts disabled, and verifies the installed `rulemeter` binary. This keeps release validation useful even when npm publication is deferred.
 
-`validate:corpus` runs the corpus validation harness against `validation/corpus.example.json`. For real validation, pass a private manifest of owned instruction files to `scripts/validate-corpus.mjs`; see `docs/validation.md`.
+`validate:corpus` runs a non-strict smoke of the corpus validation harness against `validation/corpus.example.json`. CI runs it to catch script rot, not to claim product usefulness. For real validation, pass a private manifest of owned instruction files to `scripts/validate-corpus.mjs`; see `docs/validation.md`.
+
+## Release Decision
+
+Do not publish the npm package or market RuleMeter as a standalone public tool until a private real-instruction corpus passes strict validation. The corpus should meet the evidence targets in `docs/validation.md`: duplicate usefulness near 80%, risk-finding usefulness near 60%, and review burden at or below 20 risk findings per 1,000 instruction lines.
+
+If those targets do not hold, keep RuleMeter private or absorb it into `create-starter audit-agent-rules` as an internal helper instead of publishing it as a standalone package.
 
 ## Scope
 
