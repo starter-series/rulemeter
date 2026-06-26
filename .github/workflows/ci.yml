@@ -20,6 +20,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run dogfood
+      - run: npm run validate:corpus
       - run: npm run pack:check
       - run: npm run smoke:install
       - run: npm audit --audit-level=high
