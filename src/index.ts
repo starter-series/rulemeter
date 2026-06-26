@@ -10,6 +10,8 @@ export {
   type Occurrence,
   type Recommendation,
   type RiskFinding,
+  type RiskSummary,
+  type RiskSummaryExample,
   type RuleCandidate,
   type SimilarRecommendation,
   type SimilarRuleCandidate,

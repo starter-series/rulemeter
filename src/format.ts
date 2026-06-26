@@ -1,4 +1,4 @@
-import type { AuditReport, RiskFinding, RuleCandidate, SimilarRuleCandidate, SurfaceOverlap } from "./audit.js";
+import type { AuditReport, RiskSummary, RuleCandidate, SimilarRuleCandidate, SurfaceOverlap } from "./audit.js";
 
 function riskText(candidate: RuleCandidate): string {
   return candidate.risks.length > 0 ? candidate.risks.join(",") : "low";
@@ -14,16 +14,17 @@ function similarLocationsText(candidate: SimilarRuleCandidate): string {
   return candidate.occurrences.map((occurrence) => `${occurrence.path}:${occurrence.line}`).join(", ");
 }
 
-function findingLocationsText(finding: RiskFinding): string {
-  const first = finding.occurrences.slice(0, 3).map((occurrence) => `${occurrence.path}:${occurrence.line}`);
-  if (finding.occurrences.length > 3) first.push(`+${finding.occurrences.length - 3} more`);
-  return first.join(", ");
-}
-
 function pathsText(paths: string[]): string {
   const first = paths.slice(0, 3);
   if (paths.length > 3) first.push(`+${paths.length - 3} more`);
   return first.join(", ");
+}
+
+function riskSummaryExamplesText(summary: RiskSummary): string {
+  return summary.examples
+    .slice(0, 2)
+    .map((example) => previewText(example.text))
+    .join(" | ");
 }
 
 function overlapExamplesText(overlap: SurfaceOverlap): string {
@@ -102,14 +103,16 @@ export function formatAuditTable(report: AuditReport): string {
 
   if (report.riskFindings.length > 0) {
     lines.push("");
-    lines.push("Risk findings:");
-    const headers = ["risk", "chars", "cache_hint", "locations", "text"];
-    const rows = report.riskFindings.map((finding) => [
-      finding.risks.join(","),
-      String(finding.chars),
-      finding.cacheHint,
-      findingLocationsText(finding),
-      finding.text,
+    lines.push("Risk summaries:");
+    const headers = ["id", "risk", "findings", "occurrences", "paths", "cache_hint", "examples"];
+    const rows = report.riskSummaries.map((summary) => [
+      summary.id,
+      summary.risk,
+      String(summary.findings),
+      String(summary.occurrences),
+      pathsText(summary.paths),
+      summary.cacheHint,
+      riskSummaryExamplesText(summary),
     ]);
     const widths = headers.map((header, index) => Math.max(header.length, ...rows.map((row) => row[index]?.length ?? 0)));
     lines.push(headers.map((header, index) => header.padEnd(widths[index] ?? header.length)).join("  "));
@@ -151,6 +154,7 @@ export function formatAuditMarkdown(report: AuditReport): string {
   lines.push(`- duplicate candidates: ${report.candidates.length}`);
   lines.push(`- surface overlaps: ${report.surfaceOverlaps.length}`);
   lines.push(`- risk findings: ${report.riskFindings.length}`);
+  lines.push(`- risk summaries: ${report.riskSummaries.length}`);
   lines.push(`- similar candidates: ${report.similarCandidates.length}`);
   if (report.discoveredFiles && report.discoveredFiles.length > 0) {
     lines.push(`- discovered files: ${report.discoveredFiles.map((file) => `\`${file}\``).join(", ")}`);
@@ -205,18 +209,20 @@ export function formatAuditMarkdown(report: AuditReport): string {
 
   if (report.riskFindings.length > 0) {
     lines.push("");
-    lines.push("## Risk Findings");
+    lines.push("## Risk Summaries");
     lines.push("");
-    lines.push("| Risk | Chars | Cache hint | Locations | Text |");
-    lines.push("|---|---:|---|---|---|");
-    for (const finding of report.riskFindings) {
+    lines.push("| ID | Risk | Findings | Occurrences | Paths | Cache hint | Examples |");
+    lines.push("|---|---|---:|---:|---|---|---|");
+    for (const summary of report.riskSummaries) {
       lines.push(
         `| ${[
-          escapeMarkdown(finding.risks.join(",")),
-          String(finding.chars),
-          `\`${escapeMarkdown(finding.cacheHint)}\``,
-          escapeMarkdown(findingLocationsText(finding)),
-          escapeMarkdown(finding.text),
+          `\`${escapeMarkdown(summary.id)}\``,
+          escapeMarkdown(summary.risk),
+          String(summary.findings),
+          String(summary.occurrences),
+          escapeMarkdown(pathsText(summary.paths)),
+          `\`${escapeMarkdown(summary.cacheHint)}\``,
+          escapeMarkdown(riskSummaryExamplesText(summary)),
         ].join(" | ")} |`,
       );
     }
