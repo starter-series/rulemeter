@@ -10,6 +10,7 @@ const VALID_DECISIONS = new Set(["actionable", "noise", "unsafe", "missed", "unr
 const DEFAULT_THRESHOLDS = {
   minDocuments: 20,
   minRoots: 4,
+  maxReviewItemsPerKloc: 20,
   maxRiskFindingsPerKloc: 20,
   minDuplicateUsefulRate: 0.8,
   minSurfaceOverlapUsefulRate: 0.6,
@@ -196,6 +197,10 @@ function decorateSimilar(candidate, splitById, labels, includeText) {
   };
 }
 
+function perKloc(count, totalLines) {
+  return totalLines === 0 ? 0 : (count / totalLines) * 1000;
+}
+
 function corpusWarnings({ documents, roots, splitCounts, findings, riskFindingCount, thresholds, totalLines, usefulRates }) {
   const warnings = [];
   if (documents.length < thresholds.minDocuments) {
@@ -206,7 +211,11 @@ function corpusWarnings({ documents, roots, splitCounts, findings, riskFindingCo
   }
   if ((splitCounts.holdout ?? 0) === 0) warnings.push("corpus has no holdout documents");
   if (findings.every((finding) => finding.decision === "unreviewed")) warnings.push("findings have no manual labels yet");
-  const riskPerKloc = totalLines === 0 ? 0 : (riskFindingCount / totalLines) * 1000;
+  const reviewItemsPerKloc = perKloc(findings.length, totalLines);
+  if (reviewItemsPerKloc > thresholds.maxReviewItemsPerKloc) {
+    warnings.push(`review item load is ${reviewItemsPerKloc.toFixed(1)} per 1,000 lines; target is at most ${thresholds.maxReviewItemsPerKloc}`);
+  }
+  const riskPerKloc = perKloc(riskFindingCount, totalLines);
   if (riskPerKloc > thresholds.maxRiskFindingsPerKloc) {
     warnings.push(`risk finding load is ${riskPerKloc.toFixed(1)} per 1,000 lines; target is at most ${thresholds.maxRiskFindingsPerKloc}`);
   }
@@ -231,6 +240,8 @@ function markdownReport(payload) {
     `- documents: ${payload.corpus.documents}`,
     `- roots: ${payload.corpus.roots}`,
     `- lines: ${payload.corpus.lines}`,
+    `- review item load: ${payload.metrics.reviewItemsPerKloc} per 1,000 lines`,
+    `- risk finding load: ${payload.metrics.riskFindingsPerKloc} per 1,000 lines`,
     `- duplicate candidates: ${payload.metrics.byKind.duplicate}`,
     `- surface overlaps: ${payload.metrics.byKind.surfaceOverlap}`,
     `- risk findings: ${payload.metrics.byKind.risk}`,
@@ -321,6 +332,8 @@ async function buildPayload(options) {
       splitCounts,
     },
     metrics: {
+      reviewItemsPerKloc: Number(perKloc(findings.length, totalLines).toFixed(1)),
+      riskFindingsPerKloc: Number(perKloc(report.riskFindings.length, totalLines).toFixed(1)),
       byKind: {
         duplicate: report.candidates.length,
         surfaceOverlap: report.surfaceOverlaps.length,

@@ -75,6 +75,7 @@ Treat these as validation targets, not product claims:
 - duplicate usefulness rate near 80% after manual review
 - surface-overlap usefulness rate near 60% after manual review
 - risk-summary usefulness rate near 60% after manual review
+- review item load below 20 report findings per 1,000 instruction lines
 - review burden below 20 underlying risk findings per 1,000 instruction lines
 
 If the corpus does not produce actionable review decisions, keep RuleMeter private or absorb it as an internal helper instead of publishing it as a standalone package.
