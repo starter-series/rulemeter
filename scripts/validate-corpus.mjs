@@ -65,15 +65,35 @@ function fingerprint(payload) {
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex").slice(0, 16);
 }
 
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeLabelEntry(entry) {
+  if (!isRecord(entry)) throw new UsageError("label entries must be objects");
+  const fingerprint = entry.fingerprint;
+  if (typeof fingerprint !== "string" || fingerprint.length === 0) throw new UsageError("label entries require a fingerprint");
+  const decision = entry.decision ?? "unreviewed";
+  if (!VALID_DECISIONS.has(decision)) throw new UsageError(`invalid label decision for ${fingerprint}: ${decision}`);
+  const note = entry.note ?? "";
+  if (typeof note !== "string") throw new UsageError(`label note for ${fingerprint} must be a string`);
+  return { fingerprint, decision, note };
+}
+
 function labelMap(labels) {
   const map = new Map();
   if (!labels) return map;
-  const entries = Array.isArray(labels) ? labels : Object.entries(labels).map(([fingerprint, value]) => ({ fingerprint, ...value }));
+  if (!Array.isArray(labels) && !isRecord(labels)) throw new UsageError("labels must be an object or array");
+  const entries = Array.isArray(labels)
+    ? labels
+    : Object.entries(labels).map(([fingerprint, value]) => {
+        if (!isRecord(value)) throw new UsageError(`label for ${fingerprint} must be an object`);
+        return { fingerprint, ...value };
+      });
   for (const entry of entries) {
-    if (!entry?.fingerprint) throw new UsageError("label entries require a fingerprint");
-    const decision = entry.decision ?? "unreviewed";
-    if (!VALID_DECISIONS.has(decision)) throw new UsageError(`invalid label decision for ${entry.fingerprint}: ${decision}`);
-    map.set(entry.fingerprint, { decision, note: entry.note ?? "" });
+    const label = normalizeLabelEntry(entry);
+    if (map.has(label.fingerprint)) throw new UsageError(`duplicate label fingerprint: ${label.fingerprint}`);
+    map.set(label.fingerprint, { decision: label.decision, note: label.note });
   }
   return map;
 }
