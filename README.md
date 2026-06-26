@@ -176,12 +176,15 @@ These are important safety rules, but the current keyword lint may not flag them
 ```bash
 npm test
 npm run dogfood
+npm run validate:corpus
 npm run pack:check
 npm run smoke:install
 npm audit --audit-level=high
 ```
 
 `smoke:install` packs the current checkout into a local tarball, installs that tarball in a temporary consumer project with package lifecycle scripts disabled, and verifies the installed `rulemeter` binary. This keeps release validation useful even when npm publication is deferred.
+
+`validate:corpus` runs the corpus validation harness against `validation/corpus.example.json`. For real validation, pass a private manifest of owned instruction files to `scripts/validate-corpus.mjs`; see `docs/validation.md`.
 
 ## Scope
 
