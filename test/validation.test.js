@@ -153,6 +153,47 @@ test("strict corpus validation reports stale labels", async () => {
   );
 });
 
+test("corpus validation rejects malformed label entries", async () => {
+  const manifest = await corpusFixture();
+  const manifestJson = JSON.parse(await readFile(manifest, "utf8"));
+  manifestJson.labels = {
+    badlabel00000000: "actionable",
+  };
+  await writeFile(manifest, JSON.stringify(manifestJson, null, 2), "utf8");
+
+  await assert.rejects(
+    execFileAsync(process.execPath, ["scripts/validate-corpus.mjs", "--manifest", manifest, "--format", "json"], {
+      cwd: process.cwd(),
+    }),
+    (error) => {
+      assert.equal(error.code, 2);
+      assert.match(error.stderr, /label for badlabel00000000 must be an object/u);
+      return true;
+    },
+  );
+});
+
+test("corpus validation rejects duplicate label fingerprints", async () => {
+  const manifest = await corpusFixture();
+  const manifestJson = JSON.parse(await readFile(manifest, "utf8"));
+  manifestJson.labels = [
+    { fingerprint: "dupelabel0000000", decision: "actionable" },
+    { fingerprint: "dupelabel0000000", decision: "noise" },
+  ];
+  await writeFile(manifest, JSON.stringify(manifestJson, null, 2), "utf8");
+
+  await assert.rejects(
+    execFileAsync(process.execPath, ["scripts/validate-corpus.mjs", "--manifest", manifest, "--format", "json"], {
+      cwd: process.cwd(),
+    }),
+    (error) => {
+      assert.equal(error.code, 2);
+      assert.match(error.stderr, /duplicate label fingerprint: dupelabel0000000/u);
+      return true;
+    },
+  );
+});
+
 test("corpus validation can include local text for private review", async () => {
   const manifest = await corpusFixture();
   const { stdout } = await execFileAsync(
