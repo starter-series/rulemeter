@@ -50,7 +50,9 @@ Paths may be absolute or relative to the manifest file. Keep real corpus manifes
 
 ## Labels
 
-After the first run, review findings by fingerprint and add labels:
+After the first run, review `findings[]` in the JSON or Markdown report. Each finding has a stable `fingerprint`, `kind`, `split`, `splits`, `decision`, signal fields such as `recommendation` or `risk`, and file locations. By default the harness omits raw text; use locations to open the source file, or pass `--include-text` only for local private review artifacts.
+
+Add labels by fingerprint:
 
 ```json
 {
