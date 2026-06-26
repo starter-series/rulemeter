@@ -77,8 +77,9 @@ test("CLI fail-on duplicate ignores cross-file review-only duplicates", async ()
   );
   const payload = JSON.parse(stdout);
   assert.equal(stderr, "");
-  assert.equal(payload.candidates.length, 1);
-  assert.equal(payload.candidates[0].recommendation, "review_duplicate");
+  assert.equal(payload.candidates.length, 0);
+  assert.equal(payload.surfaceOverlaps.length, 1);
+  assert.equal(payload.surfaceOverlaps[0].recommendation, "review_duplicate");
 });
 
 test("CLI fail-on risk uses risk findings outside duplicate candidates", async () => {
@@ -289,7 +290,8 @@ test("CLI preset discovers Codex instruction files", async () => {
   assert.equal(payload.preset, "codex");
   assert.deepEqual(payload.discoveredFiles, ["AGENTS.md", "packages/app/AGENTS.md"]);
   assert.deepEqual(payload.files, ["AGENTS.md", "packages/app/AGENTS.md"]);
-  assert.equal(payload.candidates[0].recommendation, "review_duplicate");
+  assert.equal(payload.candidates.length, 0);
+  assert.equal(payload.surfaceOverlaps[0].recommendation, "review_duplicate");
 });
 
 test("CLI list-files JSON reports all preset discovery", async () => {

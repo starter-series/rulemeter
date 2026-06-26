@@ -12,6 +12,7 @@ const DEFAULT_THRESHOLDS = {
   minRoots: 4,
   maxRiskFindingsPerKloc: 20,
   minDuplicateUsefulRate: 0.8,
+  minSurfaceOverlapUsefulRate: 0.6,
   minRiskUsefulRate: 0.6,
 };
 
@@ -132,6 +133,37 @@ function decorateRisk(finding, splitById, labels, includeText) {
   };
 }
 
+function decorateSurfaceOverlap(overlap, splitById, labels, includeText) {
+  const id = fingerprint({
+    kind: "surface_overlap",
+    paths: overlap.paths,
+    duplicateTexts: overlap.duplicateTexts,
+    recommendation: overlap.recommendation,
+    risks: overlap.risks,
+  });
+  const label = labels.get(id) ?? { decision: "unreviewed", note: "" };
+  const occurrences = overlap.examples.flatMap((example) => example.occurrences);
+  return {
+    fingerprint: id,
+    kind: "surface_overlap",
+    split: splitFor(occurrences, splitById),
+    decision: label.decision,
+    note: label.note,
+    recommendation: overlap.recommendation,
+    risks: overlap.risks,
+    paths: overlap.paths,
+    duplicateTexts: overlap.duplicateTexts,
+    occurrences: overlap.occurrences,
+    examples: overlap.examples.length,
+    locationText: overlap.paths.join(", "),
+    ...(includeText
+      ? {
+          exampleTexts: overlap.examples.map((example) => example.text),
+        }
+      : {}),
+  };
+}
+
 function decorateSimilar(candidate, splitById, labels, includeText) {
   const texts = [...candidate.texts].sort();
   const id = fingerprint({ kind: "similar", texts, recommendation: candidate.recommendation, risks: candidate.risks });
@@ -169,6 +201,9 @@ function corpusWarnings({ documents, roots, splitCounts, findings, thresholds, t
   if (usefulRates.duplicate !== null && usefulRates.duplicate < thresholds.minDuplicateUsefulRate) {
     warnings.push(`duplicate useful rate is ${usefulRates.duplicate}; target is at least ${thresholds.minDuplicateUsefulRate}`);
   }
+  if (usefulRates.surfaceOverlap !== null && usefulRates.surfaceOverlap < thresholds.minSurfaceOverlapUsefulRate) {
+    warnings.push(`surface overlap useful rate is ${usefulRates.surfaceOverlap}; target is at least ${thresholds.minSurfaceOverlapUsefulRate}`);
+  }
   if (usefulRates.risk !== null && usefulRates.risk < thresholds.minRiskUsefulRate) {
     warnings.push(`risk useful rate is ${usefulRates.risk}; target is at least ${thresholds.minRiskUsefulRate}`);
   }
@@ -185,6 +220,7 @@ function markdownReport(payload) {
     `- roots: ${payload.corpus.roots}`,
     `- lines: ${payload.corpus.lines}`,
     `- duplicate candidates: ${payload.metrics.byKind.duplicate}`,
+    `- surface overlaps: ${payload.metrics.byKind.surfaceOverlap}`,
     `- risk findings: ${payload.metrics.byKind.risk}`,
     `- similar candidates: ${payload.metrics.byKind.similar}`,
     "",
@@ -247,15 +283,18 @@ async function buildPayload(options) {
   });
   const findings = [
     ...report.candidates.map((candidate) => decorateDuplicate(candidate, splitById, labels, options.includeText)),
+    ...report.surfaceOverlaps.map((overlap) => decorateSurfaceOverlap(overlap, splitById, labels, options.includeText)),
     ...report.riskFindings.map((finding) => decorateRisk(finding, splitById, labels, options.includeText)),
     ...report.similarCandidates.map((candidate) => decorateSimilar(candidate, splitById, labels, options.includeText)),
   ].sort((left, right) => left.kind.localeCompare(right.kind) || left.fingerprint.localeCompare(right.fingerprint));
 
   const duplicateCounts = decisionCounts(findings.filter((finding) => finding.kind === "duplicate"));
+  const surfaceOverlapCounts = decisionCounts(findings.filter((finding) => finding.kind === "surface_overlap"));
   const riskCounts = decisionCounts(findings.filter((finding) => finding.kind === "risk"));
   const similarCounts = decisionCounts(findings.filter((finding) => finding.kind === "similar"));
   const usefulRates = {
     duplicate: usefulRate(duplicateCounts),
+    surfaceOverlap: usefulRate(surfaceOverlapCounts),
     risk: usefulRate(riskCounts),
     similar: usefulRate(similarCounts),
   };
@@ -271,16 +310,19 @@ async function buildPayload(options) {
     metrics: {
       byKind: {
         duplicate: report.candidates.length,
+        surfaceOverlap: report.surfaceOverlaps.length,
         risk: report.riskFindings.length,
         similar: report.similarCandidates.length,
       },
       decisions: {
         duplicate: duplicateCounts,
+        surfaceOverlap: surfaceOverlapCounts,
         risk: riskCounts,
         similar: similarCounts,
       },
       usefulRates: {
         duplicate: usefulRates.duplicate,
+        surfaceOverlap: usefulRates.surfaceOverlap,
         risk: usefulRates.risk,
         similar: usefulRates.similar,
       },

@@ -30,6 +30,26 @@ export interface RiskFinding {
   cacheHint: CacheHint;
 }
 
+export type SurfaceOverlapRecommendation = "keep_explicit" | "review_duplicate";
+
+export interface SurfaceOverlapExample {
+  text: string;
+  occurrences: Occurrence[];
+  chars: number;
+  risks: RiskLabel[];
+}
+
+export interface SurfaceOverlap {
+  id: string;
+  paths: string[];
+  duplicateTexts: number;
+  occurrences: number;
+  risks: RiskLabel[];
+  recommendation: SurfaceOverlapRecommendation;
+  cacheHint: CacheHint;
+  examples: SurfaceOverlapExample[];
+}
+
 export type SimilarRecommendation = "review_similar" | "keep_explicit";
 
 export interface SimilarRuleCandidate {
@@ -63,6 +83,7 @@ export interface AuditReport {
   files: string[];
   warnings: RulemeterWarning[];
   candidates: RuleCandidate[];
+  surfaceOverlaps: SurfaceOverlap[];
   riskFindings: RiskFinding[];
   similarCandidates: SimilarRuleCandidate[];
 }
@@ -178,6 +199,20 @@ function hasSameFileRepeat(occurrences: Occurrence[]): boolean {
   return [...counts.values()].some((count) => count > 1);
 }
 
+function pathsFor(occurrences: Occurrence[]): string[] {
+  return [...new Set(occurrences.map((occurrence) => occurrence.path))].sort((left, right) => left.localeCompare(right));
+}
+
+function hasCrossFileRepeat(occurrences: Occurrence[]): boolean {
+  return pathsFor(occurrences).length > 1;
+}
+
+function sameFileRepeatOccurrences(occurrences: Occurrence[]): Occurrence[] {
+  const counts = new Map<string, number>();
+  for (const occurrence of occurrences) counts.set(occurrence.path, (counts.get(occurrence.path) ?? 0) + 1);
+  return occurrences.filter((occurrence) => (counts.get(occurrence.path) ?? 0) > 1);
+}
+
 function recommendationFor(risks: RiskLabel[], occurrences: Occurrence[]): Recommendation {
   if (isHighRisk(risks)) return "keep_explicit";
   return hasSameFileRepeat(occurrences) ? "remove_duplicate" : "review_duplicate";
@@ -245,6 +280,48 @@ function findRiskFindings(groups: SegmentGroup[]): RiskFinding[] {
     .sort((left, right) => left.occurrences[0].path.localeCompare(right.occurrences[0].path) || left.occurrences[0].line - right.occurrences[0].line);
 }
 
+function findSurfaceOverlaps(groups: SegmentGroup[], minChars: number, minRepeats: number): SurfaceOverlap[] {
+  const overlapsByPathSet = new Map<
+    string,
+    {
+      paths: string[];
+      examples: SurfaceOverlapExample[];
+      occurrences: Occurrence[];
+      risks: RiskLabel[];
+    }
+  >();
+
+  for (const group of groups) {
+    if (group.chars < minChars || group.occurrences.length < minRepeats || !hasCrossFileRepeat(group.occurrences)) continue;
+    const paths = pathsFor(group.occurrences);
+    const key = paths.join("\0");
+    const risks = classifyRisks(group.text);
+    const overlap = overlapsByPathSet.get(key) ?? { paths, examples: [], occurrences: [], risks: [] };
+    overlap.examples.push({
+      text: group.text,
+      occurrences: group.occurrences,
+      chars: group.chars,
+      risks,
+    });
+    overlap.occurrences.push(...group.occurrences);
+    overlap.risks = uniqueRisks([...overlap.risks, ...risks]);
+    overlapsByPathSet.set(key, overlap);
+  }
+
+  return [...overlapsByPathSet.values()]
+    .sort((left, right) => right.examples.length - left.examples.length || left.paths.join("\0").localeCompare(right.paths.join("\0")))
+    .map((overlap, index) => ({
+      id: `SURF_${String(index + 1).padStart(2, "0")}`,
+      paths: overlap.paths,
+      duplicateTexts: overlap.examples.length,
+      occurrences: overlap.occurrences.length,
+      risks: overlap.risks,
+      recommendation: isHighRisk(overlap.risks) ? "keep_explicit" : "review_duplicate",
+      cacheHint: cacheHintFor(overlap.occurrences),
+      examples: overlap.examples.sort((left, right) => right.occurrences.length - left.occurrences.length || left.text.localeCompare(right.text)),
+    }));
+}
+
 export async function auditDocuments(documents: AuditDocument[], options: AuditOptions = {}): Promise<AuditReport> {
   const minChars = options.minChars ?? 40;
   const minRepeats = options.minRepeats ?? 2;
@@ -266,10 +343,12 @@ export async function auditDocuments(documents: AuditDocument[], options: AuditO
   });
   const segmentGroups: SegmentGroup[] = entries.map(([text, occurrences]) => ({ text, occurrences, chars: text.length }));
   const riskFindings = findRiskFindings(segmentGroups);
+  const surfaceOverlaps = findSurfaceOverlaps(segmentGroups, minChars, minRepeats);
 
   const candidates: RuleCandidate[] = [];
   for (const { text, occurrences, chars } of segmentGroups) {
-    const repeats = occurrences.length;
+    const candidateOccurrences = sameFileRepeatOccurrences(occurrences);
+    const repeats = candidateOccurrences.length;
     if (chars < minChars || repeats < minRepeats) continue;
     const risks = classifyRisks(text);
 
@@ -277,11 +356,11 @@ export async function auditDocuments(documents: AuditDocument[], options: AuditO
       id: `DUP_${String(candidates.length + 1).padStart(2, "0")}`,
       text,
       repeats,
-      occurrences,
+      occurrences: candidateOccurrences,
       chars,
       risks,
-      recommendation: recommendationFor(risks, occurrences),
-      cacheHint: cacheHintFor(occurrences),
+      recommendation: recommendationFor(risks, candidateOccurrences),
+      cacheHint: cacheHintFor(candidateOccurrences),
     });
   }
 
@@ -290,6 +369,7 @@ export async function auditDocuments(documents: AuditDocument[], options: AuditO
     files: documents.map((document) => document.id),
     warnings: [],
     candidates,
+    surfaceOverlaps,
     riskFindings,
     similarCandidates: includeSimilar
       ? findSimilarCandidates(

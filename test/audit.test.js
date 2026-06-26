@@ -37,8 +37,11 @@ test("cross-file low-risk duplicate is a review prompt, not a removal instructio
     ],
     { minChars: 5 },
   );
-  assert.equal(report.candidates.length, 1);
-  assert.equal(report.candidates[0].recommendation, "review_duplicate");
+  assert.equal(report.candidates.length, 0);
+  assert.equal(report.surfaceOverlaps.length, 1);
+  assert.equal(report.surfaceOverlaps[0].recommendation, "review_duplicate");
+  assert.deepEqual(report.surfaceOverlaps[0].paths, ["AGENTS.md", "CLAUDE.md"]);
+  assert.equal(report.surfaceOverlaps[0].duplicateTexts, 1);
 });
 
 test("generic authoring and strategy words do not trigger high-risk labels alone", () => {

@@ -1,4 +1,4 @@
-import type { AuditReport, RiskFinding, RuleCandidate, SimilarRuleCandidate } from "./audit.js";
+import type { AuditReport, RiskFinding, RuleCandidate, SimilarRuleCandidate, SurfaceOverlap } from "./audit.js";
 
 function riskText(candidate: RuleCandidate): string {
   return candidate.risks.length > 0 ? candidate.risks.join(",") : "low";
@@ -20,6 +20,27 @@ function findingLocationsText(finding: RiskFinding): string {
   return first.join(", ");
 }
 
+function pathsText(paths: string[]): string {
+  const first = paths.slice(0, 3);
+  if (paths.length > 3) first.push(`+${paths.length - 3} more`);
+  return first.join(", ");
+}
+
+function overlapExamplesText(overlap: SurfaceOverlap): string {
+  return overlap.examples
+    .slice(0, 2)
+    .map((example) => previewText(example.text))
+    .join(" | ");
+}
+
+function overlapRiskText(overlap: SurfaceOverlap): string {
+  return overlap.risks.length > 0 ? overlap.risks.join(",") : "low";
+}
+
+function previewText(value: string): string {
+  return value.length > 100 ? `${value.slice(0, 97)}...` : value;
+}
+
 function escapeMarkdown(value: string): string {
   return value.replace(/\|/gu, "\\|").replace(/\n/gu, " ");
 }
@@ -35,7 +56,7 @@ export function formatAuditTable(report: AuditReport): string {
     lines.push(`warning: ${warning.code} - ${warning.message}`);
   }
   if (report.candidates.length === 0) {
-    lines.push("No exact duplicate candidates met the thresholds.");
+    lines.push("No same-file duplicate candidates met the thresholds.");
   } else {
     lines.push("Duplicate candidates:");
     const headers = ["id", "repeats", "chars", "risk", "recommendation", "cache_hint", "locations", "text"];
@@ -51,6 +72,27 @@ export function formatAuditTable(report: AuditReport): string {
     ]);
     const widths = headers.map((header, index) => Math.max(header.length, ...rows.map((row) => row[index]?.length ?? 0)));
 
+    lines.push(headers.map((header, index) => header.padEnd(widths[index] ?? header.length)).join("  "));
+    lines.push(widths.map((width) => "-".repeat(width)).join("  "));
+    for (const row of rows) {
+      lines.push(row.map((value, index) => value.padEnd(widths[index] ?? value.length)).join("  "));
+    }
+  }
+
+  if (report.surfaceOverlaps.length > 0) {
+    lines.push("");
+    lines.push("Surface overlaps:");
+    const headers = ["id", "paths", "duplicate_texts", "occurrences", "risk", "recommendation", "examples"];
+    const rows = report.surfaceOverlaps.map((overlap) => [
+      overlap.id,
+      pathsText(overlap.paths),
+      String(overlap.duplicateTexts),
+      String(overlap.occurrences),
+      overlapRiskText(overlap),
+      overlap.recommendation,
+      overlapExamplesText(overlap),
+    ]);
+    const widths = headers.map((header, index) => Math.max(header.length, ...rows.map((row) => row[index]?.length ?? 0)));
     lines.push(headers.map((header, index) => header.padEnd(widths[index] ?? header.length)).join("  "));
     lines.push(widths.map((width) => "-".repeat(width)).join("  "));
     for (const row of rows) {
@@ -107,6 +149,7 @@ export function formatAuditMarkdown(report: AuditReport): string {
   if (report.preset) lines.push(`- preset: \`${report.preset}\``);
   lines.push(`- files: ${report.files.length}`);
   lines.push(`- duplicate candidates: ${report.candidates.length}`);
+  lines.push(`- surface overlaps: ${report.surfaceOverlaps.length}`);
   lines.push(`- risk findings: ${report.riskFindings.length}`);
   lines.push(`- similar candidates: ${report.similarCandidates.length}`);
   if (report.discoveredFiles && report.discoveredFiles.length > 0) {
@@ -118,7 +161,7 @@ export function formatAuditMarkdown(report: AuditReport): string {
   lines.push("");
 
   if (report.candidates.length === 0) {
-    lines.push("No exact duplicate candidates met the thresholds.");
+    lines.push("No same-file duplicate candidates met the thresholds.");
   } else {
     lines.push("## Duplicate Candidates");
     lines.push("");
@@ -134,6 +177,27 @@ export function formatAuditMarkdown(report: AuditReport): string {
           String(candidate.chars),
           escapeMarkdown(locationsText(candidate)),
           escapeMarkdown(candidate.text),
+        ].join(" | ")} |`,
+      );
+    }
+  }
+
+  if (report.surfaceOverlaps.length > 0) {
+    lines.push("");
+    lines.push("## Surface Overlaps");
+    lines.push("");
+    lines.push("| ID | Recommendation | Risk | Paths | Duplicate texts | Occurrences | Examples |");
+    lines.push("|---|---|---|---|---:|---:|---|");
+    for (const overlap of report.surfaceOverlaps) {
+      lines.push(
+        `| ${[
+          `\`${escapeMarkdown(overlap.id)}\``,
+          `\`${escapeMarkdown(overlap.recommendation)}\``,
+          escapeMarkdown(overlapRiskText(overlap)),
+          escapeMarkdown(pathsText(overlap.paths)),
+          String(overlap.duplicateTexts),
+          String(overlap.occurrences),
+          escapeMarkdown(overlapExamplesText(overlap)),
         ].join(" | ")} |`,
       );
     }
