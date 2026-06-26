@@ -62,6 +62,14 @@ Machine-readable output includes a stable `schemaVersion`:
 
 `rulemeter.audit.v2` intentionally removes the earlier draft token/alias fields and `count` command surface. Treat new keys as additive within v2.
 
+Important `audit --json` review keys:
+
+- `candidates`: same-file exact duplicate candidates. The table heading calls these "Duplicate candidates"; the JSON key is `candidates`.
+- `surfaceOverlaps`: exact cross-file overlaps grouped by shared file set.
+- `riskFindings`: line-level keyword risk matches.
+- `riskSummaries`: risk matches grouped by label for human review.
+- `similarCandidates`: optional lexical near-duplicate candidates, emitted only with `--experimental-similar`.
+
 `riskFindings` lists keyword-based risk matches independently from duplicate candidates, so `--fail-on risk` can catch single-stated rules. `riskSummaries` groups those matches by label for human review. This is still best-effort and non-exhaustive.
 
 `surfaceOverlaps` summarizes exact cross-file overlaps by the set of files that share text. These are review prompts for drift, parity, or consolidation, not deletion instructions.

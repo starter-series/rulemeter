@@ -23,6 +23,17 @@ async function fixture() {
   return path;
 }
 
+test("CLI audit subcommand help exits zero", async () => {
+  for (const flag of ["--help", "-h"]) {
+    const { stdout, stderr } = await execFileAsync(process.execPath, ["dist/cli.js", "audit", flag], {
+      cwd: process.cwd(),
+    });
+    assert.equal(stderr, "");
+    assert.match(stdout, /^rulemeter audit/m);
+    assert.match(stdout, /--fail-on duplicate\|risk\|similar/);
+  }
+});
+
 test("CLI audit emits JSON", async () => {
   const path = await fixture();
   const { stdout } = await execFileAsync(process.execPath, ["dist/cli.js", "audit", path, "--json", "--min-chars", "5"], {

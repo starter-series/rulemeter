@@ -29,6 +29,21 @@ Examples
 `;
 }
 
+function auditHelp(): string {
+  return `rulemeter audit — review agent instruction files for duplicate and drift signals.
+
+Usage
+  rulemeter audit <file...> [--json] [--format table|markdown|json] [--fail-on duplicate|risk|similar] [--experimental-similar] [--similarity-threshold N] [--config PATH] [--preset NAME] [--list-files] [--min-chars N] [--min-repeats N]
+
+Examples
+  rulemeter audit AGENTS.md CLAUDE.md task.txt
+  rulemeter audit AGENTS.md --json
+  rulemeter audit --preset all --list-files
+  rulemeter audit --preset all --format markdown
+  rulemeter audit --preset all --fail-on risk
+`;
+}
+
 class CliError extends RulemeterError {}
 
 type AuditFormat = "table" | "markdown" | "json";
@@ -137,6 +152,10 @@ async function run(argv: string[]): Promise<number> {
 
   const command = args.shift();
   if (command === "audit") {
+    if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
+      console.log(auditHelp());
+      return 0;
+    }
     const configPath = takeValue(args, "--config", "");
     const loadedConfig = await loadRulemeterConfigWithMeta(configPath || undefined);
     const config: RulemeterConfig = loadedConfig.config;
