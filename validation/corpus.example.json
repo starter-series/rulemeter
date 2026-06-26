@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "rulemeter.validation.v1",
+  "description": "Example only. Use an uncommitted manifest for real owned instruction files.",
+  "thresholds": {
+    "minDocuments": 20,
+    "minRoots": 4,
+    "maxRiskFindingsPerKloc": 20,
+    "minDuplicateUsefulRate": 0.8,
+    "minRiskUsefulRate": 0.6
+  },
+  "documents": [
+    {
+      "id": "fixtures/AGENTS.md",
+      "path": "../fixtures/AGENTS.md",
+      "root": "rulemeter-fixtures",
+      "split": "calibration"
+    },
+    {
+      "id": "fixtures/CLAUDE.md",
+      "path": "../fixtures/CLAUDE.md",
+      "root": "rulemeter-fixtures",
+      "split": "calibration"
+    },
+    {
+      "id": "fixtures/task.txt",
+      "path": "../fixtures/task.txt",
+      "root": "rulemeter-fixtures",
+      "split": "holdout"
+    }
+  ],
+  "labels": {}
+}

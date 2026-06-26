@@ -19,6 +19,7 @@ export const expectedPackFiles = [
   "dist/risk.js",
   "dist/schema.d.ts",
   "dist/schema.js",
+  "docs/validation.md",
   "package.json",
 ].sort();
 
