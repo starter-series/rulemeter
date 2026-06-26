@@ -68,6 +68,7 @@ test("corpus validation emits fingerprinted JSON without raw text by default", a
   assert.equal(payload.metrics.byKind.risk, 3);
   assert.equal(payload.metrics.byKind.riskSummary, 3);
   assert.equal(typeof payload.metrics.usefulRatesBySplit.risk, "object");
+  assert.ok(payload.findings.some((finding) => finding.split === "mixed" && finding.splits.includes("holdout")));
   assert.equal(payload.metrics.labelCoverage.reviewed, 0);
   assert.equal(payload.metrics.labelCoverage.unreviewed, payload.findings.length);
   assert.equal(payload.metrics.labelCoverage.stale, 0);
@@ -106,6 +107,7 @@ test("strict corpus validation rejects weak holdout usefulness even when aggrega
       const strictPayload = JSON.parse(error.stdout);
       assert.equal(strictPayload.metrics.usefulRates.risk, 0.667);
       assert.equal(strictPayload.metrics.usefulRatesBySplit.risk.holdout, 0);
+      assert.equal(strictPayload.metrics.decisionsBySplit.risk.holdout.noise, 1);
       assert.ok(strictPayload.warnings.some((warning) => warning.includes("holdout risk-summary useful rate is 0")));
       return true;
     },
