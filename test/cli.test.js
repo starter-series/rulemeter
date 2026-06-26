@@ -162,6 +162,18 @@ test("CLI reports typed missing file errors", async () => {
       return true;
     },
   );
+
+  await assert.rejects(
+    execFileAsync(process.execPath, ["dist/cli.js", "audit", "missing.md", "--format", "json"], {
+      cwd: process.cwd(),
+    }),
+    (error) => {
+      const payload = JSON.parse(error.stderr);
+      assert.equal(payload.schemaVersion, "rulemeter.error.v1");
+      assert.equal(payload.error.code, "FILE_NOT_FOUND");
+      return true;
+    },
+  );
 });
 
 test("CLI reports typed invalid config errors", async () => {
@@ -209,6 +221,13 @@ test("CLI empty preset list-files is allowed but audit reports NO_FILES_FOUND", 
   assert.equal(discovery.schemaVersion, "rulemeter.discovery.v1");
   assert.deepEqual(discovery.files, []);
 
+  const formatList = await execFileAsync(process.execPath, [cliPath, "audit", "--preset", "all", "--list-files", "--format", "json"], {
+    cwd: dir,
+  });
+  const formatDiscovery = JSON.parse(formatList.stdout);
+  assert.equal(formatDiscovery.schemaVersion, "rulemeter.discovery.v1");
+  assert.deepEqual(formatDiscovery.files, []);
+
   await assert.rejects(
     execFileAsync(process.execPath, [cliPath, "audit", "--preset", "all", "--json"], {
       cwd: dir,
@@ -218,6 +237,18 @@ test("CLI empty preset list-files is allowed but audit reports NO_FILES_FOUND", 
       assert.equal(payload.schemaVersion, "rulemeter.error.v1");
       assert.equal(payload.error.code, "NO_FILES_FOUND");
       assert.match(payload.error.message, /Run from a repo root/);
+      return true;
+    },
+  );
+
+  await assert.rejects(
+    execFileAsync(process.execPath, [cliPath, "audit", "--preset", "all", "--format", "json"], {
+      cwd: dir,
+    }),
+    (error) => {
+      const payload = JSON.parse(error.stderr);
+      assert.equal(payload.schemaVersion, "rulemeter.error.v1");
+      assert.equal(payload.error.code, "NO_FILES_FOUND");
       return true;
     },
   );

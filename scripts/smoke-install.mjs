@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertPackInventory } from "./pack-inventory.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const tempRoot = mkdtempSync(join(tmpdir(), "rulemeter-install-smoke-"));
@@ -19,6 +20,7 @@ try {
   const packOutput = run("npm", ["pack", "--json", "--pack-destination", tempRoot]);
   const [pack] = JSON.parse(packOutput);
   if (!pack?.filename) throw new Error("npm pack did not return a filename");
+  assertPackInventory(pack);
 
   const tarballPath = join(tempRoot, pack.filename);
   const consumer = join(tempRoot, "consumer");
