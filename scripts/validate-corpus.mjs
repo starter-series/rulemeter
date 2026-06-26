@@ -83,6 +83,10 @@ function splitFor(occurrences, splitById) {
   return splits.length === 1 ? splits[0] : "mixed";
 }
 
+function splitsFor(occurrences, splitById) {
+  return [...new Set(occurrences.map((occurrence) => splitById.get(occurrence.path) ?? "unknown"))].sort();
+}
+
 function locationText(occurrences) {
   return occurrences.map((occurrence) => `${occurrence.path}:${occurrence.line}`).join(", ");
 }
@@ -100,8 +104,10 @@ function decisionCounts(findings) {
 function decisionCountsBySplit(findings) {
   const counts = {};
   for (const finding of findings) {
-    counts[finding.split] ??= emptyDecisionCounts();
-    counts[finding.split][finding.decision] += 1;
+    for (const split of finding.splits ?? [finding.split]) {
+      counts[split] ??= emptyDecisionCounts();
+      counts[split][finding.decision] += 1;
+    }
   }
   return counts;
 }
@@ -137,6 +143,7 @@ function decorateDuplicate(candidate, splitById, labels, includeText) {
     fingerprint: id,
     kind: "duplicate",
     split: splitFor(candidate.occurrences, splitById),
+    splits: splitsFor(candidate.occurrences, splitById),
     decision: label.decision,
     note: label.note,
     recommendation: candidate.recommendation,
@@ -162,6 +169,7 @@ function decorateRiskSummary(summary, splitById, labels, includeText) {
     fingerprint: id,
     kind: "risk_summary",
     split: splitFor(occurrences, splitById),
+    splits: splitsFor(occurrences, splitById),
     decision: label.decision,
     note: label.note,
     risk: summary.risk,
@@ -192,6 +200,7 @@ function decorateSurfaceOverlap(overlap, splitById, labels, includeText) {
     fingerprint: id,
     kind: "surface_overlap",
     split: splitFor(occurrences, splitById),
+    splits: splitsFor(occurrences, splitById),
     decision: label.decision,
     note: label.note,
     recommendation: overlap.recommendation,
@@ -217,6 +226,7 @@ function decorateSimilar(candidate, splitById, labels, includeText) {
     fingerprint: id,
     kind: "similar",
     split: splitFor(candidate.occurrences, splitById),
+    splits: splitsFor(candidate.occurrences, splitById),
     decision: label.decision,
     note: label.note,
     recommendation: candidate.recommendation,
