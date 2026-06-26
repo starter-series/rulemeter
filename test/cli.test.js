@@ -97,6 +97,8 @@ test("CLI fail-on risk uses risk findings outside duplicate candidates", async (
       assert.equal(payload.schemaVersion, "rulemeter.audit.v2");
       assert.equal(payload.candidates.length, 0);
       assert.equal(payload.riskFindings.length, 1);
+      assert.equal(payload.riskSummaries.length, 1);
+      assert.equal(payload.riskSummaries[0].risk, "test_required");
       assert.deepEqual(payload.riskFindings[0].risks, ["test_required"]);
       assert.match(error.stderr, /--fail-on risk matched/);
       return true;

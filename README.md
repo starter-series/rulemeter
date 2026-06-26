@@ -62,7 +62,7 @@ Machine-readable output includes a stable `schemaVersion`:
 
 `rulemeter.audit.v2` intentionally removes the earlier draft token/alias fields and `count` command surface. Treat new keys as additive within v2.
 
-`riskFindings` lists keyword-based risk matches independently from duplicate candidates, so `--fail-on risk` can catch single-stated rules. This is still best-effort and non-exhaustive.
+`riskFindings` lists keyword-based risk matches independently from duplicate candidates, so `--fail-on risk` can catch single-stated rules. `riskSummaries` groups those matches by label for human review. This is still best-effort and non-exhaustive.
 
 `surfaceOverlaps` summarizes exact cross-file overlaps by the set of files that share text. These are review prompts for drift, parity, or consolidation, not deletion instructions.
 
@@ -193,7 +193,7 @@ npm audit --audit-level=high
 
 ## Release Decision
 
-Do not publish the npm package or market RuleMeter as a standalone public tool until a private real-instruction corpus passes strict validation. The corpus should meet the evidence targets in `docs/validation.md`: same-file duplicate usefulness near 80%, surface-overlap usefulness near 60%, risk-finding usefulness near 60%, and review burden at or below 20 risk findings per 1,000 instruction lines.
+Do not publish the npm package or market RuleMeter as a standalone public tool until a private real-instruction corpus passes strict validation. The corpus should meet the evidence targets in `docs/validation.md`: same-file duplicate usefulness near 80%, surface-overlap usefulness near 60%, risk-summary usefulness near 60%, and review burden at or below 20 underlying risk findings per 1,000 instruction lines.
 
 If those targets do not hold, keep RuleMeter private or absorb it into `create-starter audit-agent-rules` as an internal helper instead of publishing it as a standalone package.
 

@@ -63,6 +63,9 @@ test("corpus validation emits fingerprinted JSON without raw text by default", a
   assert.equal(payload.metrics.byKind.duplicate, 1);
   assert.equal(payload.metrics.byKind.surfaceOverlap, 1);
   assert.equal(payload.metrics.byKind.risk, 2);
+  assert.equal(payload.metrics.byKind.riskSummary, 2);
+  assert.ok(payload.findings.some((finding) => finding.kind === "risk_summary"));
+  assert.ok(payload.findings.every((finding) => finding.kind !== "risk"));
   assert.ok(payload.findings.every((finding) => typeof finding.fingerprint === "string"));
   assert.ok(payload.findings.every((finding) => !("text" in finding)));
 });

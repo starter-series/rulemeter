@@ -116,20 +116,32 @@ function decorateDuplicate(candidate, splitById, labels, includeText) {
   };
 }
 
-function decorateRisk(finding, splitById, labels, includeText) {
-  const id = fingerprint({ kind: "risk", text: finding.text, risks: finding.risks });
+function decorateRiskSummary(summary, splitById, labels, includeText) {
+  const id = fingerprint({
+    kind: "risk_summary",
+    risk: summary.risk,
+    paths: summary.paths,
+    findings: summary.findings,
+  });
   const label = labels.get(id) ?? { decision: "unreviewed", note: "" };
+  const occurrences = summary.examples.flatMap((example) => example.occurrences);
   return {
     fingerprint: id,
-    kind: "risk",
-    split: splitFor(finding.occurrences, splitById),
+    kind: "risk_summary",
+    split: splitFor(occurrences, splitById),
     decision: label.decision,
     note: label.note,
-    risks: finding.risks,
-    chars: finding.chars,
-    locations: finding.occurrences,
-    locationText: locationText(finding.occurrences),
-    ...(includeText ? { text: finding.text } : {}),
+    risk: summary.risk,
+    findings: summary.findings,
+    occurrences: summary.occurrences,
+    paths: summary.paths,
+    examples: summary.examples.length,
+    locationText: summary.paths.join(", "),
+    ...(includeText
+      ? {
+          exampleTexts: summary.examples.map((example) => example.text),
+        }
+      : {}),
   };
 }
 
@@ -184,7 +196,7 @@ function decorateSimilar(candidate, splitById, labels, includeText) {
   };
 }
 
-function corpusWarnings({ documents, roots, splitCounts, findings, thresholds, totalLines, usefulRates }) {
+function corpusWarnings({ documents, roots, splitCounts, findings, riskFindingCount, thresholds, totalLines, usefulRates }) {
   const warnings = [];
   if (documents.length < thresholds.minDocuments) {
     warnings.push(`corpus has ${documents.length} documents; target is at least ${thresholds.minDocuments}`);
@@ -194,7 +206,7 @@ function corpusWarnings({ documents, roots, splitCounts, findings, thresholds, t
   }
   if ((splitCounts.holdout ?? 0) === 0) warnings.push("corpus has no holdout documents");
   if (findings.every((finding) => finding.decision === "unreviewed")) warnings.push("findings have no manual labels yet");
-  const riskPerKloc = totalLines === 0 ? 0 : (findings.filter((finding) => finding.kind === "risk").length / totalLines) * 1000;
+  const riskPerKloc = totalLines === 0 ? 0 : (riskFindingCount / totalLines) * 1000;
   if (riskPerKloc > thresholds.maxRiskFindingsPerKloc) {
     warnings.push(`risk finding load is ${riskPerKloc.toFixed(1)} per 1,000 lines; target is at most ${thresholds.maxRiskFindingsPerKloc}`);
   }
@@ -222,6 +234,7 @@ function markdownReport(payload) {
     `- duplicate candidates: ${payload.metrics.byKind.duplicate}`,
     `- surface overlaps: ${payload.metrics.byKind.surfaceOverlap}`,
     `- risk findings: ${payload.metrics.byKind.risk}`,
+    `- risk summaries: ${payload.metrics.byKind.riskSummary}`,
     `- similar candidates: ${payload.metrics.byKind.similar}`,
     "",
     "## Warnings",
@@ -234,7 +247,7 @@ function markdownReport(payload) {
   }
   lines.push("", "## Findings", "", "| Fingerprint | Kind | Split | Decision | Signal | Locations |", "|---|---|---|---|---|---|");
   for (const finding of payload.findings) {
-    const signal = finding.recommendation ?? finding.risks.join(",");
+    const signal = finding.recommendation ?? finding.risk ?? finding.risks?.join(",") ?? "low";
     lines.push(`| \`${finding.fingerprint}\` | ${finding.kind} | ${finding.split} | ${finding.decision} | ${signal || "low"} | ${finding.locationText} |`);
   }
   return `${lines.join("\n")}\n`;
@@ -284,18 +297,18 @@ async function buildPayload(options) {
   const findings = [
     ...report.candidates.map((candidate) => decorateDuplicate(candidate, splitById, labels, options.includeText)),
     ...report.surfaceOverlaps.map((overlap) => decorateSurfaceOverlap(overlap, splitById, labels, options.includeText)),
-    ...report.riskFindings.map((finding) => decorateRisk(finding, splitById, labels, options.includeText)),
+    ...report.riskSummaries.map((summary) => decorateRiskSummary(summary, splitById, labels, options.includeText)),
     ...report.similarCandidates.map((candidate) => decorateSimilar(candidate, splitById, labels, options.includeText)),
   ].sort((left, right) => left.kind.localeCompare(right.kind) || left.fingerprint.localeCompare(right.fingerprint));
 
   const duplicateCounts = decisionCounts(findings.filter((finding) => finding.kind === "duplicate"));
   const surfaceOverlapCounts = decisionCounts(findings.filter((finding) => finding.kind === "surface_overlap"));
-  const riskCounts = decisionCounts(findings.filter((finding) => finding.kind === "risk"));
+  const riskSummaryCounts = decisionCounts(findings.filter((finding) => finding.kind === "risk_summary"));
   const similarCounts = decisionCounts(findings.filter((finding) => finding.kind === "similar"));
   const usefulRates = {
     duplicate: usefulRate(duplicateCounts),
     surfaceOverlap: usefulRate(surfaceOverlapCounts),
-    risk: usefulRate(riskCounts),
+    risk: usefulRate(riskSummaryCounts),
     similar: usefulRate(similarCounts),
   };
   const payload = {
@@ -312,12 +325,13 @@ async function buildPayload(options) {
         duplicate: report.candidates.length,
         surfaceOverlap: report.surfaceOverlaps.length,
         risk: report.riskFindings.length,
+        riskSummary: report.riskSummaries.length,
         similar: report.similarCandidates.length,
       },
       decisions: {
         duplicate: duplicateCounts,
         surfaceOverlap: surfaceOverlapCounts,
-        risk: riskCounts,
+        risk: riskSummaryCounts,
         similar: similarCounts,
       },
       usefulRates: {
@@ -330,7 +344,7 @@ async function buildPayload(options) {
     findings,
     warnings: [],
   };
-  payload.warnings = corpusWarnings({ documents, roots, splitCounts, findings, thresholds, totalLines, usefulRates });
+  payload.warnings = corpusWarnings({ documents, roots, splitCounts, findings, riskFindingCount: report.riskFindings.length, thresholds, totalLines, usefulRates });
   return payload;
 }
 

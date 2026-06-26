@@ -108,6 +108,9 @@ test("risk findings scan single-stated rules outside duplicate candidates", asyn
   );
   assert.equal(report.candidates.length, 0);
   assert.equal(report.riskFindings.length, 1);
+  assert.equal(report.riskSummaries.length, 1);
+  assert.equal(report.riskSummaries[0].risk, "test_required");
+  assert.equal(report.riskSummaries[0].findings, 1);
   assert.deepEqual(report.riskFindings[0].risks, ["test_required"]);
   assert.equal(report.riskFindings[0].occurrences[0].path, "memory://rules");
   assert.equal(report.riskFindings[0].occurrences[0].line, 1);
@@ -202,6 +205,7 @@ test("identity and PII rules stay explicit", async () => {
   assert.ok(report.candidates[0].risks.includes("identity"));
   assert.ok(report.candidates[0].risks.includes("pii"));
   assert.equal(report.riskFindings.length, 1);
+  assert.equal(report.riskSummaries.length, 2);
   assert.ok(report.riskFindings[0].risks.includes("identity"));
   assert.ok(report.riskFindings[0].risks.includes("pii"));
 });
@@ -222,6 +226,8 @@ test("each high-risk family stays explicit", async () => {
     assert.equal(report.candidates[0].recommendation, "keep_explicit", label);
     assert.ok(report.candidates[0].risks.includes(label), label);
     assert.equal(report.riskFindings.length, 1, label);
+    assert.equal(report.riskSummaries.length, 1, label);
+    assert.equal(report.riskSummaries[0].risk, label);
     assert.ok(report.riskFindings[0].risks.includes(label), label);
   }
 });

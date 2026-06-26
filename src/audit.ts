@@ -30,6 +30,23 @@ export interface RiskFinding {
   cacheHint: CacheHint;
 }
 
+export interface RiskSummaryExample {
+  text: string;
+  occurrences: Occurrence[];
+  chars: number;
+  risks: RiskLabel[];
+}
+
+export interface RiskSummary {
+  id: string;
+  risk: RiskLabel;
+  findings: number;
+  occurrences: number;
+  paths: string[];
+  cacheHint: CacheHint;
+  examples: RiskSummaryExample[];
+}
+
 export type SurfaceOverlapRecommendation = "keep_explicit" | "review_duplicate";
 
 export interface SurfaceOverlapExample {
@@ -85,6 +102,7 @@ export interface AuditReport {
   candidates: RuleCandidate[];
   surfaceOverlaps: SurfaceOverlap[];
   riskFindings: RiskFinding[];
+  riskSummaries: RiskSummary[];
   similarCandidates: SimilarRuleCandidate[];
 }
 
@@ -280,6 +298,37 @@ function findRiskFindings(groups: SegmentGroup[]): RiskFinding[] {
     .sort((left, right) => left.occurrences[0].path.localeCompare(right.occurrences[0].path) || left.occurrences[0].line - right.occurrences[0].line);
 }
 
+function findRiskSummaries(findings: RiskFinding[]): RiskSummary[] {
+  const byRisk = new Map<RiskLabel, RiskSummaryExample[]>();
+  for (const finding of findings) {
+    for (const risk of finding.risks) {
+      const examples = byRisk.get(risk) ?? [];
+      examples.push({
+        text: finding.text,
+        occurrences: finding.occurrences,
+        chars: finding.chars,
+        risks: finding.risks,
+      });
+      byRisk.set(risk, examples);
+    }
+  }
+
+  return [...byRisk.entries()]
+    .sort((left, right) => right[1].length - left[1].length || left[0].localeCompare(right[0]))
+    .map(([risk, examples], index) => {
+      const occurrences = examples.flatMap((example) => example.occurrences);
+      return {
+        id: `RISK_${String(index + 1).padStart(2, "0")}`,
+        risk,
+        findings: examples.length,
+        occurrences: occurrences.length,
+        paths: pathsFor(occurrences),
+        cacheHint: cacheHintFor(occurrences),
+        examples: examples.sort((left, right) => right.occurrences.length - left.occurrences.length || left.text.localeCompare(right.text)),
+      };
+    });
+}
+
 function findSurfaceOverlaps(groups: SegmentGroup[], minChars: number, minRepeats: number): SurfaceOverlap[] {
   const overlapsByPathSet = new Map<
     string,
@@ -343,6 +392,7 @@ export async function auditDocuments(documents: AuditDocument[], options: AuditO
   });
   const segmentGroups: SegmentGroup[] = entries.map(([text, occurrences]) => ({ text, occurrences, chars: text.length }));
   const riskFindings = findRiskFindings(segmentGroups);
+  const riskSummaries = findRiskSummaries(riskFindings);
   const surfaceOverlaps = findSurfaceOverlaps(segmentGroups, minChars, minRepeats);
 
   const candidates: RuleCandidate[] = [];
@@ -371,6 +421,7 @@ export async function auditDocuments(documents: AuditDocument[], options: AuditO
     candidates,
     surfaceOverlaps,
     riskFindings,
+    riskSummaries,
     similarCandidates: includeSimilar
       ? findSimilarCandidates(
           segmentGroups.filter((group) => group.chars >= minChars),
