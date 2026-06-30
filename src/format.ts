@@ -1,5 +1,6 @@
 import type { AuditReport, RiskSummary, RuleCandidate, SimilarRuleCandidate, SurfaceOverlap } from "./audit.js";
 import type { DecisionReport } from "./decisions.js";
+import type { QueueReport } from "./queue.js";
 import type { SourceReport } from "./sources.js";
 
 function riskText(candidate: RuleCandidate): string {
@@ -418,5 +419,94 @@ export function formatDecisionsMarkdown(report: DecisionReport): string {
   lines.push("```bash");
   lines.push("rulemeter decisions --accept all");
   lines.push("```");
+  return lines.join("\n");
+}
+
+function queuePathsText(paths: string[]): string {
+  if (paths.length === 0) return "-";
+  return pathsText(paths);
+}
+
+function queueLocationsText(locations: string[]): string {
+  if (locations.length === 0) return "-";
+  return pathsText(locations);
+}
+
+export function formatQueueTable(report: QueueReport): string {
+  const lines: string[] = [];
+  if (report.configPath) lines.push(`config: ${report.configPath}`);
+  if (report.preset) lines.push(`preset: ${report.preset}`);
+  if (report.discoveredFiles && report.discoveredFiles.length > 0) {
+    lines.push(`discovered_files: ${report.discoveredFiles.join(", ")}`);
+  }
+  lines.push(`ledger: ${report.ledgerPath}`);
+  lines.push(`queue: ${report.counts.total} items, ${report.counts.review} review, ${report.counts.hint} hints`);
+
+  if (report.items.length === 0) {
+    lines.push("No open review queue items.");
+    return lines.join("\n");
+  }
+
+  const headers = ["id", "priority", "kind", "action", "signal", "paths", "locations", "message"];
+  const rows = report.items.map((item) => [
+    item.id,
+    item.priority,
+    item.kind,
+    item.action,
+    item.signal,
+    queuePathsText(item.paths),
+    queueLocationsText(item.locations),
+    item.message,
+  ]);
+  const widths = headers.map((header, index) => Math.max(header.length, ...rows.map((row) => row[index]?.length ?? 0)));
+  lines.push("Review queue:");
+  lines.push(headers.map((header, index) => header.padEnd(widths[index] ?? header.length)).join("  "));
+  lines.push(widths.map((width) => "-".repeat(width)).join("  "));
+  for (const row of rows) {
+    lines.push(row.map((value, index) => value.padEnd(widths[index] ?? value.length)).join("  "));
+  }
+  return lines.join("\n");
+}
+
+export function formatQueueMarkdown(report: QueueReport): string {
+  const lines: string[] = ["# RuleMeter Review Queue", ""];
+  if (report.configPath) lines.push(`- config: \`${report.configPath}\``);
+  if (report.preset) lines.push(`- preset: \`${report.preset}\``);
+  lines.push(`- files: ${report.files.length}`);
+  lines.push(`- ledger: \`${report.ledgerPath}\``);
+  lines.push(`- total items: ${report.counts.total}`);
+  lines.push(`- review items: ${report.counts.review}`);
+  lines.push(`- hints: ${report.counts.hint}`);
+  lines.push(`- decision items: ${report.counts.byKind.decision}`);
+  lines.push(`- duplicate items: ${report.counts.byKind.duplicate}`);
+  lines.push(`- surface-overlap items: ${report.counts.byKind.surface_overlap}`);
+  lines.push(`- similar items: ${report.counts.byKind.similar}`);
+  lines.push(`- keyword hint items: ${report.counts.byKind.risk_summary}`);
+  if (report.discoveredFiles && report.discoveredFiles.length > 0) {
+    lines.push(`- discovered files: ${report.discoveredFiles.map((file) => `\`${file}\``).join(", ")}`);
+  }
+
+  if (report.items.length === 0) {
+    lines.push("", "No open review queue items.");
+    return lines.join("\n");
+  }
+
+  lines.push("", "## Queue Items", "");
+  lines.push("| ID | Priority | Kind | Action | Signal | Paths | Locations | Message |");
+  lines.push("|---|---|---|---|---|---|---|---|");
+  for (const item of report.items) {
+    lines.push(
+      `| ${[
+        `\`${escapeMarkdown(item.id)}\``,
+        escapeMarkdown(item.priority),
+        escapeMarkdown(item.kind),
+        escapeMarkdown(item.action),
+        escapeMarkdown(item.signal),
+        escapeMarkdown(queuePathsText(item.paths)),
+        escapeMarkdown(queueLocationsText(item.locations)),
+        escapeMarkdown(item.message),
+      ].join(" | ")} |`,
+    );
+  }
   return lines.join("\n");
 }

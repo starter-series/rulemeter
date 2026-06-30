@@ -17,6 +17,8 @@ export const expectedPackFiles = [
   "dist/index.js",
   "dist/presets.d.ts",
   "dist/presets.js",
+  "dist/queue.d.ts",
+  "dist/queue.js",
   "dist/risk.d.ts",
   "dist/risk.js",
   "dist/schema.d.ts",

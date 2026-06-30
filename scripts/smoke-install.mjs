@@ -65,7 +65,13 @@ try {
     throw new Error("decisions smoke did not accept current source warnings");
   }
 
-  console.log(`install smoke ok: ${pack.name}@${pack.version} (${pack.entryCount} files, audit v2, sources v1, decisions v1)`);
+  const queueOutput = run("npx", ["rulemeter", "queue", "--json", "--min-chars", "10"], { cwd: consumer });
+  const queue = JSON.parse(queueOutput);
+  if (queue.schemaVersion !== "rulemeter.queue.v1" || queue.counts.byKind.decision !== 0 || queue.counts.byKind.duplicate !== 1) {
+    throw new Error("queue smoke did not return a valid rulemeter.queue.v1 payload");
+  }
+
+  console.log(`install smoke ok: ${pack.name}@${pack.version} (${pack.entryCount} files, audit v2, sources v1, decisions v1, queue v1)`);
 } finally {
   if (process.env.RULEMETER_KEEP_SMOKE_DIR) {
     console.log(`kept smoke directory: ${tempRoot}`);

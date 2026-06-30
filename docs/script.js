@@ -6,7 +6,7 @@ const translations = {
     "nav.install": "Install",
     "hero.title": "Review agent rules without pretending the lint is exhaustive.",
     "hero.body":
-      "RuleMeter is a report-only review aid for same-file duplicate instructions, cross-file verbatim overlaps, source topology, and optional near-duplicate review prompts.",
+      "RuleMeter is a report-only review aid for same-file duplicate instructions, cross-file verbatim overlaps, source topology, scoreless queues, and optional near-duplicate review prompts.",
     "hero.primary": "View on GitHub",
     "hero.secondary": "Try locally",
     "workflow.title": "Report first, rewrite never.",
@@ -31,8 +31,10 @@ const translations = {
     "signals.similar.body": "Optional lexical-overlap review prompts, never automatic semantic dedupe.",
     "signals.decisions.title": "Decision ledger",
     "signals.decisions.body": "Remembers owner-accepted topology warnings and marks them stale when evidence changes.",
+    "signals.queue.title": "Review queue",
+    "signals.queue.body": "Combines open review items into one scoreless queue while keeping keyword matches as hints.",
     "signals.ci.title": "CI tripwires",
-    "signals.ci.body": "Fail on same-file duplicate removals, risk findings, similar-rule findings, or unaccepted decisions.",
+    "signals.ci.body": "Fail on duplicate removals, similar-rule findings, unaccepted decisions, or queue review items.",
     "evidence.title": "Evidence before product claims.",
     "evidence.body":
       "A private real-instruction corpus currently supports the internal-helper path, not a standalone public product claim.",
@@ -64,7 +66,7 @@ const translations = {
     "nav.install": "설치",
     "hero.title": "lint가 완전하다고 꾸미지 않고 에이전트 규칙을 검토하세요.",
     "hero.body":
-      "RuleMeter는 같은 파일 내부 중복 지시문, 파일 간 축자 overlap, source topology, 선택형 유사 규칙 후보를 보여주는 report-only review aid입니다.",
+      "RuleMeter는 같은 파일 내부 중복 지시문, 파일 간 축자 overlap, source topology, scoreless queue, 선택형 유사 규칙 후보를 보여주는 report-only review aid입니다.",
     "hero.primary": "GitHub에서 보기",
     "hero.secondary": "로컬에서 실행",
     "workflow.title": "먼저 리포트하고, 파일은 고치지 않습니다.",
@@ -89,8 +91,10 @@ const translations = {
     "signals.similar.body": "선택형 lexical-overlap 리뷰 신호이며, 자동 의미 중복 제거가 아닙니다.",
     "signals.decisions.title": "Decision ledger",
     "signals.decisions.body": "owner가 승인한 topology 경고를 기억하고 증거가 바뀌면 stale로 표시합니다.",
+    "signals.queue.title": "Review queue",
+    "signals.queue.body": "열린 검토 항목을 점수 없이 한 queue로 모으고, 키워드 매치는 hint로 유지합니다.",
     "signals.ci.title": "CI 트립와이어",
-    "signals.ci.body": "같은 파일 내부 삭제 후보, 위험 신호, 유사 규칙 발견, 미승인 결정을 기준으로 실패시킬 수 있습니다.",
+    "signals.ci.body": "중복 삭제 후보, 유사 규칙 발견, 미승인 결정, queue review item을 기준으로 실패시킬 수 있습니다.",
     "evidence.title": "제품 주장보다 근거가 먼저입니다.",
     "evidence.body":
       "현재 private real-instruction corpus는 독립 공개 제품 주장이 아니라 internal-helper 경로를 뒷받침합니다.",
@@ -122,7 +126,7 @@ const translations = {
     "nav.install": "導入",
     "hero.title": "lint が完全だと装わずに、エージェント規則を確認します。",
     "hero.body":
-      "RuleMeter は、同一ファイル内の重複指示、ファイル間の逐語 overlap、source topology、任意の類似規則候補を示す report-only review aid です。",
+      "RuleMeter は、同一ファイル内の重複指示、ファイル間の逐語 overlap、source topology、scoreless queue、任意の類似規則候補を示す report-only review aid です。",
     "hero.primary": "GitHub を見る",
     "hero.secondary": "ローカルで試す",
     "workflow.title": "まず報告し、書き換えません。",
@@ -147,8 +151,10 @@ const translations = {
     "signals.similar.body": "任意の lexical-overlap レビュー候補であり、自動の意味的 dedupe ではありません。",
     "signals.decisions.title": "Decision ledger",
     "signals.decisions.body": "owner が承認した topology warning を記録し、証拠が変わると stale として表示します。",
+    "signals.queue.title": "Review queue",
+    "signals.queue.body": "open review items を scoreless queue にまとめ、keyword match は hint のままにします。",
     "signals.ci.title": "CI トリップワイヤー",
-    "signals.ci.body": "同一ファイル内の削除候補、リスク所見、類似規則、未承認 decisions で失敗させられます。",
+    "signals.ci.body": "重複削除候補、類似規則、未承認 decisions、queue review items で失敗させられます。",
     "evidence.title": "製品主張の前に根拠を置きます。",
     "evidence.body":
       "現在の private real-instruction corpus は、standalone 公開製品ではなく internal-helper の経路を支持しています。",

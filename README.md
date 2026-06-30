@@ -2,7 +2,7 @@
 
 > Status: Lab — standalone validation before possible `create-starter audit-agent-rules` absorption.
 
-`RuleMeter` is a report-only review aid for same-file duplicate instruction text, cross-file verbatim overlap, source-of-truth topology, optional owner-ratified topology decisions, and optional lexical near-duplicate review prompts in files such as `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and Copilot instruction files.
+`RuleMeter` is a report-only review aid for same-file duplicate instruction text, cross-file verbatim overlap, source-of-truth topology, optional owner-ratified topology decisions, a scoreless review queue, and optional lexical near-duplicate review prompts in files such as `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and Copilot instruction files.
 
 Website: https://starter-series.github.io/rulemeter/
 
@@ -12,6 +12,7 @@ It helps maintainers review:
 - cross-file verbatim overlaps that may need parity or consolidation review
 - source-of-truth topology warnings such as local overrides or byte-identical mirrors
 - owner-ratified topology decisions stored in a local ledger
+- a single review queue that combines current open review items without scoring them
 - keyword-based review prompts that may deserve human attention
 - optional lexical near-duplicate review prompts
 
@@ -52,6 +53,9 @@ rulemeter sources --preset all --format markdown
 rulemeter decisions
 rulemeter decisions --accept all
 rulemeter decisions --fail-on unaccepted
+rulemeter queue
+rulemeter queue --format markdown
+rulemeter queue --fail-on review
 rulemeter audit AGENTS.md --json
 rulemeter audit AGENTS.md --config rulemeter.config.json
 ```
@@ -70,6 +74,7 @@ Machine-readable output includes a stable `schemaVersion`:
 - `rulemeter.audit.v2` for `audit --json`
 - `rulemeter.sources.v1` for `sources --json`
 - `rulemeter.decisions.v1` for `decisions --json`
+- `rulemeter.queue.v1` for `queue --json`
 - `rulemeter.discovery.v1` for `audit --list-files --json`
 - `rulemeter.error.v1` for JSON errors
 
@@ -101,6 +106,8 @@ Human-readable `sources` reports classify files as:
 
 `rulemeter.decisions.v1` compares current source-topology warning fingerprints against `.rulemeter/decisions.json`. Decision keys are structural (`kind`, warning signal, subject path, and target path); evidence hashes are stored separately so a previously accepted local override can become `stale` when the underlying file content or topology evidence changes.
 
+`rulemeter.queue.v1` combines current open review items from `audit` and `decisions` into one scoreless queue. Source decision items, same-file duplicate actions, cross-file surface overlaps, and optional lexical similar candidates are `review` priority. Keyword risk summaries are `hint` priority because they are non-exhaustive.
+
 Errors use `rulemeter.error.v1` and stable `error.code` values for automation. Common user-facing codes include `NO_FILES_FOUND`, `FILE_NOT_FOUND`, `NOT_A_FILE`, `CONFIG_NOT_FOUND`, `CONFIG_INVALID_JSON`, `CONFIG_INVALID`, `INVALID_OPTION`, `UNKNOWN_FLAG`, and `UNKNOWN_COMMAND`.
 
 ## Reports And CI Tripwires
@@ -118,6 +125,8 @@ rulemeter audit --preset all --fail-on duplicate
 rulemeter audit --preset all --fail-on risk
 rulemeter audit --preset all --experimental-similar --fail-on similar
 rulemeter decisions --fail-on unaccepted
+rulemeter queue --fail-on review
+rulemeter queue --fail-on any
 ```
 
 | Gate | Fails when |
@@ -128,6 +137,8 @@ rulemeter decisions --fail-on unaccepted
 | `decisions --fail-on pending` | At least one current topology warning has no accepted ledger entry. |
 | `decisions --fail-on stale` | At least one accepted topology warning changed evidence. |
 | `decisions --fail-on unaccepted` | At least one current topology warning is pending or stale. |
+| `queue --fail-on review` | At least one non-hint queue item is open. Keyword hints do not trigger this gate. |
+| `queue --fail-on any` | At least one queue item is open, including keyword hints. |
 
 Do not treat `--fail-on risk` as a safety certification gate. It is useful for review attention and regression tripwires, but it can miss important safety rules.
 
@@ -193,6 +204,29 @@ Decision statuses:
 
 The initial ledger scope is source-topology warnings only: local overrides, byte-identical mirrors that are not symlink/import-backed, symlink targets outside the scan, and import targets outside the scan. It is not a general policy approval database, and it does not infer semantic equivalence.
 
+## Review Queue
+
+Use `rulemeter queue` when you want the current review surface in one place.
+
+```bash
+rulemeter queue
+rulemeter queue --format markdown
+rulemeter queue --fail-on review
+rulemeter queue --experimental-similar --format markdown
+```
+
+The queue is scoreless and read-only. It does not rank files, grade an agent setup, infer semantic drift, or write the decision ledger. It combines:
+
+| Queue kind | Priority | Source |
+|---|---|---|
+| `decision` | `review` | Pending or stale source-topology decisions from `.rulemeter/decisions.json`. |
+| `duplicate` | `review` | Same-file exact duplicate actions from `audit`. |
+| `surface_overlap` | `review` | Cross-file exact overlap reviews from `audit`. |
+| `similar` | `review` | Optional lexical similarity reviews when `--experimental-similar` is enabled. |
+| `risk_summary` | `hint` | Keyword risk summaries from `audit`; non-exhaustive and not a safety guarantee. |
+
+Use `queue --fail-on review` when CI should fail only for non-hint review work. Use `queue --fail-on any` only if keyword hints should also fail the run.
+
 ## Config
 
 `RuleMeter` auto-loads `rulemeter.config.json` from the current directory when present. You can also pass `--config <path>`.
@@ -245,6 +279,7 @@ These are important safety rules, but the current keyword lint may not flag them
 - RuleMeter's default duplicate recommendations only group exact normalized same-file duplicate text.
 - Cross-file duplicate text is summarized as `surfaceOverlaps` because different agents may need explicit parallel instructions.
 - Source topology checks are filesystem/syntax checks only. They can identify symlinks, `@path.md` imports, byte-identical mirrors, and local overrides, but they do not infer whether two different files are semantically aligned.
+- The review queue is an aggregation view over existing signals. It does not introduce a stronger classifier or product-quality score.
 - Experimental similar-rule detection uses lexical overlap and is off by default. Treat `similarCandidates` as review prompts, not proof of semantic equivalence.
 - Similar-rule detection can catch near repeats such as reordered shared wording, but it can miss meaning-preserving rewrites that swap most vocabulary. Do not use it as a semantic drift detector.
 - Risk findings are keyword-based and non-exhaustive; they can produce both false positives and false negatives.
