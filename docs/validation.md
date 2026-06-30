@@ -4,6 +4,8 @@ RuleMeter is still a lab tool. Use corpus validation to collect evidence before 
 
 The validation harness reads a local manifest of real instruction files, runs RuleMeter, and emits review metrics. It does not commit corpus contents. By default it reports fingerprints, locations, recommendations, and risk labels without including raw rule text.
 
+Use [`release-checklist.md`](release-checklist.md) for the full release-candidate gate. This document explains the corpus harness; the checklist decides whether the evidence is enough for standalone publication or only internal-helper use.
+
 ## Run
 
 ```bash

@@ -69,3 +69,14 @@ test("validation docs show the labelable findings JSON shape", async () => {
   assert.match(docs, /"schemaVersion": "rulemeter.validation.labels.v1"/u);
   assert.match(docs, /--labels labels\.review\.json/u);
 });
+
+test("release checklist keeps strict private corpus out of CI smoke", async () => {
+  const checklist = await readFile("docs/release-checklist.md", "utf8");
+  const readme = await readFile("README.md", "utf8");
+
+  assert.match(checklist, /npm run validate:corpus` is intentionally non-strict/u);
+  assert.match(checklist, /Standalone publication requires a private, owned, real-instruction corpus/u);
+  assert.match(checklist, /requiredSignals": \["surface_overlap", "risk_summary"\]/u);
+  assert.match(checklist, /Keep `README\.md` English-only/u);
+  assert.match(readme, /docs\/release-checklist\.md/u);
+});
