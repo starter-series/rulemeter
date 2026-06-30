@@ -2,16 +2,16 @@
 
 > Status: Lab — standalone validation before possible `create-starter audit-agent-rules` absorption.
 
-`RuleMeter` is a report-only review aid for exact and lexical agent-instruction drift, same-file duplicate text, and cross-file surface overlap in files such as `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and Copilot instruction files.
+`RuleMeter` is a report-only review aid for same-file duplicate instruction text, cross-file verbatim overlap, and optional lexical near-duplicate review prompts in files such as `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and Copilot instruction files.
 
 Website: https://starter-series.github.io/rulemeter/
 
 It helps maintainers review:
 
 - same-file duplicated instruction text
-- cross-file surface overlaps that may indicate drift or intentional parity
+- cross-file verbatim overlaps that may need parity or consolidation review
 - keyword-based review prompts that may deserve human attention
-- optional lexical near-duplicate drift candidates
+- optional lexical near-duplicate review prompts
 
 It does not rewrite files, compress prompts, score an agent harness, auto-sync instruction files, guarantee safety coverage, prove that an instruction set is secure, or replace a human review. Treat the report as a review aid, not an AI safety/security linter, runtime guardrail, harness scorecard, or enforcement engine.
 
@@ -76,7 +76,7 @@ Important `audit --json` review keys:
 
 `riskFindings` lists keyword-based risk matches independently from duplicate candidates, so `--fail-on risk` can catch single-stated rules. `riskSummaries` groups those matches by label for human review. This is still best-effort and non-exhaustive.
 
-`surfaceOverlaps` summarizes exact cross-file overlaps by the set of files that share text. These are review prompts for drift, parity, or consolidation, not deletion instructions.
+`surfaceOverlaps` summarizes exact cross-file overlaps by the set of files that share text. These are review prompts for parity or consolidation, not deletion instructions or semantic drift findings.
 
 Errors use `rulemeter.error.v1` and stable `error.code` values for automation. Common user-facing codes include `NO_FILES_FOUND`, `FILE_NOT_FOUND`, `NOT_A_FILE`, `CONFIG_NOT_FOUND`, `CONFIG_INVALID_JSON`, `CONFIG_INVALID`, `INVALID_OPTION`, `UNKNOWN_FLAG`, and `UNKNOWN_COMMAND`.
 
@@ -154,10 +154,10 @@ When a config file is loaded, table output prints `config: <path>` and JSON outp
 | Recommendation | Meaning |
 |---|---|
 | `remove_duplicate` | Low-risk exact duplicate text repeats inside the same file and appears safe enough to review for deletion. |
-| `review_duplicate` | Cross-file exact overlap appears in `surfaceOverlaps`. Review for drift, parity, or consolidation; do not treat it as a safe deletion instruction. |
+| `review_duplicate` | Cross-file exact overlap appears in `surfaceOverlaps`. Review for parity or consolidation; do not treat it as a safe deletion instruction. |
 | `keep_explicit` | The text matched a risk label, so duplicate removal should be reviewed carefully. |
 
-Human-readable table and Markdown reports translate these raw JSON recommendation values into action labels such as "Probably removable", "Keep explicit", and "Review for parity or drift".
+Human-readable table and Markdown reports translate these raw JSON recommendation values into action labels such as "Probably removable", "Keep explicit", and "Review for parity or consolidation".
 
 ## Risk Labels
 
@@ -225,4 +225,4 @@ If those targets do not hold, keep RuleMeter private or absorb it into `create-s
 
 ## Scope
 
-This repo exists to validate whether agent-rule advisory linting is useful as a small standalone tool. If it proves useful repeatedly, the intended absorption path is `create-starter audit-agent-rules`.
+This repo exists to validate whether non-scoring duplicate and overlap review is useful as a small standalone tool. If it proves useful repeatedly, the intended absorption path is `create-starter audit-agent-rules`.

@@ -10,7 +10,7 @@ import { DISCOVERY_SCHEMA_VERSION, ERROR_SCHEMA_VERSION } from "./schema.js";
 const VERSION = "0.1.0";
 
 function help(): string {
-  return `rulemeter — best-effort review aid for agent instruction drift and duplicates.
+  return `rulemeter — read-only review aid for agent instruction duplicates and cross-file overlaps.
 
 Usage
   rulemeter audit <file...> [--json] [--format table|markdown|json] [--fail-on duplicate|risk|similar] [--experimental-similar] [--similarity-threshold N] [--config PATH] [--preset NAME] [--list-files] [--min-chars N] [--min-repeats N]
@@ -30,7 +30,7 @@ Examples
 }
 
 function auditHelp(): string {
-  return `rulemeter audit — review agent instruction files for duplicate and drift signals.
+  return `rulemeter audit — review agent instruction files for duplicate and overlap signals.
 
 Usage
   rulemeter audit <file...> [--json] [--format table|markdown|json] [--fail-on duplicate|risk|similar] [--experimental-similar] [--similarity-threshold N] [--config PATH] [--preset NAME] [--list-files] [--min-chars N] [--min-repeats N]

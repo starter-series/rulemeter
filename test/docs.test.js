@@ -56,13 +56,14 @@ test("GitHub Pages states the current validation verdict without standalone over
   assert.doesNotMatch(translations.en["install.body"], /publish-ready/u);
 });
 
-test("README narrows drift claims to exact and lexical review", async () => {
+test("README avoids product drift claims and scopes lexical review", async () => {
   const readme = await readFile("README.md", "utf8");
 
-  assert.match(readme, /exact and lexical agent-instruction drift/u);
+  assert.match(readme, /cross-file verbatim overlap/u);
+  assert.match(readme, /semantic drift findings/u);
   assert.match(readme, /not automatic semantic dedupe/u);
   assert.match(readme, /Do not use it as a semantic drift detector/u);
-  assert.doesNotMatch(readme, /semantic drift detector for agent instructions/iu);
+  assert.doesNotMatch(readme, /agent-instruction drift/u);
 });
 
 test("validation docs show the labelable findings JSON shape", async () => {
