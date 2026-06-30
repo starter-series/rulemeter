@@ -1,9 +1,18 @@
 #!/usr/bin/env node
 import { existsSync, statSync } from "node:fs";
+import { resolve } from "node:path";
 import { auditRules } from "./audit.js";
 import { loadRulemeterConfigWithMeta, type RulemeterConfig } from "./config.js";
+import { acceptSourceDecisions, DEFAULT_DECISION_LEDGER_PATH, decisionReportForSources, loadDecisionLedger } from "./decisions.js";
 import { RulemeterError } from "./errors.js";
-import { formatAuditMarkdown, formatAuditTable, formatSourcesMarkdown, formatSourcesTable } from "./format.js";
+import {
+  formatAuditMarkdown,
+  formatAuditTable,
+  formatDecisionsMarkdown,
+  formatDecisionsTable,
+  formatSourcesMarkdown,
+  formatSourcesTable,
+} from "./format.js";
 import { discoverPresetFiles, presetNames } from "./presets.js";
 import { analyzeInstructionSources } from "./sources.js";
 import { DISCOVERY_SCHEMA_VERSION, ERROR_SCHEMA_VERSION } from "./schema.js";
@@ -16,6 +25,7 @@ function help(): string {
 Usage
   rulemeter audit <file...> [--json] [--format table|markdown|json] [--fail-on duplicate|risk|similar] [--experimental-similar] [--similarity-threshold N] [--config PATH] [--preset NAME] [--list-files] [--min-chars N] [--min-repeats N]
   rulemeter sources [file...] [--json] [--format table|markdown|json] [--preset NAME]
+  rulemeter decisions [file...] [--json] [--format table|markdown|json] [--preset NAME] [--ledger PATH] [--accept ID|all] [--note TEXT] [--fail-on pending|stale|unaccepted]
   rulemeter --version
   rulemeter --help
 
@@ -30,6 +40,8 @@ Examples
   rulemeter audit --preset all --list-files
   rulemeter sources
   rulemeter sources --preset all --format markdown
+  rulemeter decisions
+  rulemeter decisions --accept all
 `;
 }
 
@@ -61,10 +73,25 @@ Examples
 `;
 }
 
+function decisionsHelp(): string {
+  return `rulemeter decisions — review and ratify source-topology warnings in a local ledger.
+
+Usage
+  rulemeter decisions [file...] [--json] [--format table|markdown|json] [--preset NAME] [--ledger PATH] [--accept ID|all] [--note TEXT] [--fail-on pending|stale|unaccepted]
+
+Examples
+  rulemeter decisions
+  rulemeter decisions --format markdown
+  rulemeter decisions --accept all
+  rulemeter decisions --fail-on unaccepted
+`;
+}
+
 class CliError extends RulemeterError {}
 
 type AuditFormat = "table" | "markdown" | "json";
 type FailOn = "duplicate" | "risk" | "similar";
+type DecisionFailOn = "pending" | "stale" | "unaccepted";
 
 function takeValue(args: string[], flag: string, fallback: string): string {
   const index = args.indexOf(flag);
@@ -121,6 +148,12 @@ function parseFailOn(value: string): FailOn | null {
   throw new CliError("INVALID_OPTION", "--fail-on must be one of: duplicate, risk, similar");
 }
 
+function parseDecisionFailOn(value: string): DecisionFailOn | null {
+  if (!value) return null;
+  if (value === "pending" || value === "stale" || value === "unaccepted") return value;
+  throw new CliError("INVALID_OPTION", "--fail-on must be one of: pending, stale, unaccepted");
+}
+
 function assertPreset(preset: string): void {
   if (preset && !(presetNames as string[]).includes(preset)) {
     throw new CliError("INVALID_OPTION", `--preset must be one of: ${presetNames.join(", ")}`);
@@ -135,6 +168,13 @@ function assertFiles(paths: string[]): void {
   for (const path of paths) {
     if (!existsSync(path)) throw new CliError("FILE_NOT_FOUND", `file not found: ${path}`);
     if (!statSync(path).isFile()) throw new CliError("NOT_A_FILE", `not a file: ${path}`);
+  }
+}
+
+function assertLedgerPathSafe(ledgerPath: string, files: string[]): void {
+  const ledger = resolve(ledgerPath);
+  if (files.some((file) => resolve(file) === ledger)) {
+    throw new CliError("INVALID_OPTION", "--ledger must not point at a scanned instruction file");
   }
 }
 
@@ -154,6 +194,13 @@ function failOnMatched(report: Awaited<ReturnType<typeof auditRules>>, failOn: F
   if (failOn === "duplicate") return report.candidates.some((candidate) => candidate.recommendation === "remove_duplicate");
   if (failOn === "risk") return report.riskFindings.length > 0;
   return report.similarCandidates.length > 0;
+}
+
+function decisionFailOnMatched(report: ReturnType<typeof decisionReportForSources>, failOn: DecisionFailOn | null): boolean {
+  if (!failOn) return false;
+  if (failOn === "pending") return report.counts.pending > 0;
+  if (failOn === "stale") return report.counts.stale > 0;
+  return report.counts.pending + report.counts.stale > 0;
 }
 
 async function run(argv: string[]): Promise<number> {
@@ -249,6 +296,45 @@ async function run(argv: string[]): Promise<number> {
       console.log(formatSourcesTable(report));
     }
     return 0;
+  }
+  if (command === "decisions") {
+    if (args[0] === "--help" || args[0] === "-h") {
+      console.log(decisionsHelp());
+      return 0;
+    }
+    const json = takeBool(args, "--json");
+    const format = parseAuditFormat(takeValue(args, "--format", ""), json);
+    const ledgerPath = takeValue(args, "--ledger", DEFAULT_DECISION_LEDGER_PATH);
+    const accept = takeValue(args, "--accept", "");
+    const note = takeValue(args, "--note", "");
+    const failOn = parseDecisionFailOn(takeValue(args, "--fail-on", ""));
+    const preset = takeValue(args, "--preset", args.length === 0 ? "all" : "");
+    assertPreset(preset);
+    assertNoUnknownFlags(args);
+    const discoveredFiles = preset ? await discoverPresetFiles(preset) : [];
+    const files = unique([...args, ...discoveredFiles]);
+    assertFilesFound(files, preset, "decisions");
+    assertFiles(files);
+    assertLedgerPathSafe(ledgerPath, files);
+
+    const sourceReport = await analyzeInstructionSources(files);
+    sourceReport.preset = preset || null;
+    sourceReport.discoveredFiles = discoveredFiles;
+
+    const report = accept
+      ? await acceptSourceDecisions(sourceReport, { ledgerPath, accept, note })
+      : decisionReportForSources(sourceReport, await loadDecisionLedger(ledgerPath), ledgerPath);
+
+    if (format === "json") {
+      console.log(JSON.stringify(report, null, 2));
+    } else if (format === "markdown") {
+      console.log(formatDecisionsMarkdown(report));
+    } else {
+      console.log(formatDecisionsTable(report));
+    }
+    const failed = decisionFailOnMatched(report, failOn);
+    if (failed) console.error(`rulemeter: --fail-on ${failOn} matched`);
+    return failed ? 1 : 0;
   }
 
   throw new CliError("UNKNOWN_COMMAND", `unknown command: ${command ?? ""}`);

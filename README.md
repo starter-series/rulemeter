@@ -2,7 +2,7 @@
 
 > Status: Lab — standalone validation before possible `create-starter audit-agent-rules` absorption.
 
-`RuleMeter` is a report-only review aid for same-file duplicate instruction text, cross-file verbatim overlap, and optional lexical near-duplicate review prompts in files such as `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and Copilot instruction files.
+`RuleMeter` is a report-only review aid for same-file duplicate instruction text, cross-file verbatim overlap, source-of-truth topology, optional owner-ratified topology decisions, and optional lexical near-duplicate review prompts in files such as `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and Copilot instruction files.
 
 Website: https://starter-series.github.io/rulemeter/
 
@@ -10,10 +10,12 @@ It helps maintainers review:
 
 - same-file duplicated instruction text
 - cross-file verbatim overlaps that may need parity or consolidation review
+- source-of-truth topology warnings such as local overrides or byte-identical mirrors
+- owner-ratified topology decisions stored in a local ledger
 - keyword-based review prompts that may deserve human attention
 - optional lexical near-duplicate review prompts
 
-It does not rewrite files, compress prompts, score an agent harness, auto-sync instruction files, guarantee safety coverage, prove that an instruction set is secure, or replace a human review. Treat the report as a review aid, not an AI safety/security linter, runtime guardrail, harness scorecard, or enforcement engine.
+It does not rewrite instruction files, compress prompts, score an agent harness, auto-sync instruction files, guarantee safety coverage, prove that an instruction set is secure, or replace a human review. The only built-in write path is the optional `.rulemeter/decisions.json` ledger created by `rulemeter decisions --accept ...`. Treat the report as a review aid, not an AI safety/security linter, runtime guardrail, harness scorecard, or enforcement engine.
 
 ## Install
 
@@ -47,6 +49,9 @@ rulemeter audit --preset all --fail-on risk
 rulemeter audit --preset all --experimental-similar --format markdown
 rulemeter sources
 rulemeter sources --preset all --format markdown
+rulemeter decisions
+rulemeter decisions --accept all
+rulemeter decisions --fail-on unaccepted
 rulemeter audit AGENTS.md --json
 rulemeter audit AGENTS.md --config rulemeter.config.json
 ```
@@ -64,6 +69,7 @@ Machine-readable output includes a stable `schemaVersion`:
 
 - `rulemeter.audit.v2` for `audit --json`
 - `rulemeter.sources.v1` for `sources --json`
+- `rulemeter.decisions.v1` for `decisions --json`
 - `rulemeter.discovery.v1` for `audit --list-files --json`
 - `rulemeter.error.v1` for JSON errors
 
@@ -93,6 +99,8 @@ Human-readable `sources` reports classify files as:
 | `verbatim_mirror` | File is byte-identical to canonical, but is not symlink/import-backed. |
 | `local_override` | File differs from canonical and should be confirmed as intentional. |
 
+`rulemeter.decisions.v1` compares current source-topology warning fingerprints against `.rulemeter/decisions.json`. Decision keys are structural (`kind`, warning signal, subject path, and target path); evidence hashes are stored separately so a previously accepted local override can become `stale` when the underlying file content or topology evidence changes.
+
 Errors use `rulemeter.error.v1` and stable `error.code` values for automation. Common user-facing codes include `NO_FILES_FOUND`, `FILE_NOT_FOUND`, `NOT_A_FILE`, `CONFIG_NOT_FOUND`, `CONFIG_INVALID_JSON`, `CONFIG_INVALID`, `INVALID_OPTION`, `UNKNOWN_FLAG`, and `UNKNOWN_COMMAND`.
 
 ## Reports And CI Tripwires
@@ -109,6 +117,7 @@ Use `--fail-on` to make CI fail after printing the normal report:
 rulemeter audit --preset all --fail-on duplicate
 rulemeter audit --preset all --fail-on risk
 rulemeter audit --preset all --experimental-similar --fail-on similar
+rulemeter decisions --fail-on unaccepted
 ```
 
 | Gate | Fails when |
@@ -116,6 +125,9 @@ rulemeter audit --preset all --experimental-similar --fail-on similar
 | `duplicate` | At least one same-file exact duplicate candidate recommends `remove_duplicate`. Cross-file `surfaceOverlaps` are report-only. |
 | `risk` | At least one best-effort risk finding was found. |
 | `similar` | At least one experimental similar-rule candidate was found. |
+| `decisions --fail-on pending` | At least one current topology warning has no accepted ledger entry. |
+| `decisions --fail-on stale` | At least one accepted topology warning changed evidence. |
+| `decisions --fail-on unaccepted` | At least one current topology warning is pending or stale. |
 
 Do not treat `--fail-on risk` as a safety certification gate. It is useful for review attention and regression tripwires, but it can miss important safety rules.
 
@@ -156,6 +168,30 @@ rulemeter sources
 rulemeter sources --preset all --format markdown
 rulemeter sources AGENTS.md CLAUDE.md .github/copilot-instructions.md --json
 ```
+
+## Decision Ledger
+
+Use `rulemeter decisions` after `rulemeter sources` when a source-topology warning is intentional and should not keep appearing as new review work.
+
+```bash
+rulemeter decisions
+rulemeter decisions --format markdown
+rulemeter decisions --accept all
+rulemeter decisions --accept DEC_123456789ABC --note "Intentional tool-specific override."
+rulemeter decisions --fail-on unaccepted
+```
+
+By default, the ledger path is `.rulemeter/decisions.json`. The command reads instruction files and writes only the ledger when `--accept` is used. It does not edit `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, Copilot files, or other instruction surfaces.
+
+Decision statuses:
+
+| Status | Meaning |
+|---|---|
+| `pending` | Current source-topology warning has not been accepted in the ledger. |
+| `accepted` | Current warning matches an accepted ledger entry and evidence hash. |
+| `stale` | A matching ledger entry exists, but current evidence changed and should be re-ratified. |
+
+The initial ledger scope is source-topology warnings only: local overrides, byte-identical mirrors that are not symlink/import-backed, symlink targets outside the scan, and import targets outside the scan. It is not a general policy approval database, and it does not infer semantic equivalence.
 
 ## Config
 
