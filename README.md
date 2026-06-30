@@ -45,6 +45,8 @@ rulemeter audit --preset all --format markdown
 rulemeter audit --preset all --fail-on duplicate
 rulemeter audit --preset all --fail-on risk
 rulemeter audit --preset all --experimental-similar --format markdown
+rulemeter sources
+rulemeter sources --preset all --format markdown
 rulemeter audit AGENTS.md --json
 rulemeter audit AGENTS.md --config rulemeter.config.json
 ```
@@ -61,6 +63,7 @@ npm run dogfood
 Machine-readable output includes a stable `schemaVersion`:
 
 - `rulemeter.audit.v2` for `audit --json`
+- `rulemeter.sources.v1` for `sources --json`
 - `rulemeter.discovery.v1` for `audit --list-files --json`
 - `rulemeter.error.v1` for JSON errors
 
@@ -77,6 +80,18 @@ Important `audit --json` review keys:
 `riskFindings` lists keyword-based risk matches independently from duplicate candidates, so `--fail-on risk` can catch single-stated rules. `riskSummaries` groups those matches by label for human review. This is still best-effort and non-exhaustive.
 
 `surfaceOverlaps` summarizes exact cross-file overlaps by the set of files that share text. These are review prompts for parity or consolidation, not deletion instructions or semantic drift findings.
+
+`rulemeter.sources.v1` reports source-of-truth topology for agent instruction files using filesystem and syntax facts: symlinks, `@path.md` imports, byte-identical mirrors, and local overrides. It does not use semantic similarity or keyword-risk classification.
+
+Human-readable `sources` reports classify files as:
+
+| Role | Meaning |
+|---|---|
+| `canonical` | Selected source file, usually `AGENTS.md` or the target referenced by other files. |
+| `symlink_alias` | File is a symlink to the canonical source. |
+| `import_alias` | File imports the canonical source with an `@path.md` reference. |
+| `verbatim_mirror` | File is byte-identical to canonical, but is not symlink/import-backed. |
+| `local_override` | File differs from canonical and should be confirmed as intentional. |
 
 Errors use `rulemeter.error.v1` and stable `error.code` values for automation. Common user-facing codes include `NO_FILES_FOUND`, `FILE_NOT_FOUND`, `NOT_A_FILE`, `CONFIG_NOT_FOUND`, `CONFIG_INVALID_JSON`, `CONFIG_INVALID`, `INVALID_OPTION`, `UNKNOWN_FLAG`, and `UNKNOWN_COMMAND`.
 
@@ -134,6 +149,14 @@ rulemeter audit --preset all --list-files
 rulemeter audit --preset all --list-files --json
 ```
 
+Inspect source-of-truth topology:
+
+```bash
+rulemeter sources
+rulemeter sources --preset all --format markdown
+rulemeter sources AGENTS.md CLAUDE.md .github/copilot-instructions.md --json
+```
+
 ## Config
 
 `RuleMeter` auto-loads `rulemeter.config.json` from the current directory when present. You can also pass `--config <path>`.
@@ -185,6 +208,7 @@ These are important safety rules, but the current keyword lint may not flag them
 
 - RuleMeter's default duplicate recommendations only group exact normalized same-file duplicate text.
 - Cross-file duplicate text is summarized as `surfaceOverlaps` because different agents may need explicit parallel instructions.
+- Source topology checks are filesystem/syntax checks only. They can identify symlinks, `@path.md` imports, byte-identical mirrors, and local overrides, but they do not infer whether two different files are semantically aligned.
 - Experimental similar-rule detection uses lexical overlap and is off by default. Treat `similarCandidates` as review prompts, not proof of semantic equivalence.
 - Similar-rule detection can catch near repeats such as reordered shared wording, but it can miss meaning-preserving rewrites that swap most vocabulary. Do not use it as a semantic drift detector.
 - Risk findings are keyword-based and non-exhaustive; they can produce both false positives and false negatives.

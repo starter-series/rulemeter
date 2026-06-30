@@ -42,7 +42,7 @@ async function walkMarkdownRoot(root: string): Promise<string[]> {
         await visit(resolve(directory, entry.name));
         continue;
       }
-      if (!entry.isFile()) continue;
+      if (!entry.isFile() && !entry.isSymbolicLink()) continue;
       files.push(normalizePath(relative(root, resolve(directory, entry.name))));
     }
   }

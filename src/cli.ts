@@ -3,8 +3,9 @@ import { existsSync, statSync } from "node:fs";
 import { auditRules } from "./audit.js";
 import { loadRulemeterConfigWithMeta, type RulemeterConfig } from "./config.js";
 import { RulemeterError } from "./errors.js";
-import { formatAuditMarkdown, formatAuditTable } from "./format.js";
+import { formatAuditMarkdown, formatAuditTable, formatSourcesMarkdown, formatSourcesTable } from "./format.js";
 import { discoverPresetFiles, presetNames } from "./presets.js";
+import { analyzeInstructionSources } from "./sources.js";
 import { DISCOVERY_SCHEMA_VERSION, ERROR_SCHEMA_VERSION } from "./schema.js";
 
 const VERSION = "0.1.0";
@@ -14,6 +15,7 @@ function help(): string {
 
 Usage
   rulemeter audit <file...> [--json] [--format table|markdown|json] [--fail-on duplicate|risk|similar] [--experimental-similar] [--similarity-threshold N] [--config PATH] [--preset NAME] [--list-files] [--min-chars N] [--min-repeats N]
+  rulemeter sources [file...] [--json] [--format table|markdown|json] [--preset NAME]
   rulemeter --version
   rulemeter --help
 
@@ -26,6 +28,8 @@ Examples
   rulemeter audit --preset all --experimental-similar --format markdown
   rulemeter audit AGENTS.md --config rulemeter.config.json
   rulemeter audit --preset all --list-files
+  rulemeter sources
+  rulemeter sources --preset all --format markdown
 `;
 }
 
@@ -41,6 +45,19 @@ Examples
   rulemeter audit --preset all --list-files
   rulemeter audit --preset all --format markdown
   rulemeter audit --preset all --fail-on risk
+`;
+}
+
+function sourcesHelp(): string {
+  return `rulemeter sources — inspect agent instruction source-of-truth topology.
+
+Usage
+  rulemeter sources [file...] [--json] [--format table|markdown|json] [--preset NAME]
+
+Examples
+  rulemeter sources
+  rulemeter sources --preset all --format markdown
+  rulemeter sources AGENTS.md CLAUDE.md .github/copilot-instructions.md --json
 `;
 }
 
@@ -121,7 +138,7 @@ function assertFiles(paths: string[]): void {
   }
 }
 
-function assertFilesFound(paths: string[], preset: string): void {
+function assertFilesFound(paths: string[], preset: string, command = "audit"): void {
   if (paths.length > 0) return;
   if (preset) {
     throw new CliError(
@@ -129,7 +146,7 @@ function assertFilesFound(paths: string[], preset: string): void {
       `no files found for preset "${preset}". Run from a repo root, pass explicit files, or use --list-files to preview discovery.`,
     );
   }
-  throw new CliError("NO_FILES_FOUND", "audit requires at least one file");
+  throw new CliError("NO_FILES_FOUND", `${command} requires at least one file`);
 }
 
 function failOnMatched(report: Awaited<ReturnType<typeof auditRules>>, failOn: FailOn | null): boolean {
@@ -206,6 +223,32 @@ async function run(argv: string[]): Promise<number> {
     const failed = failOnMatched(report, failOn);
     if (failed) console.error(`rulemeter: --fail-on ${failOn} matched`);
     return failed ? 1 : 0;
+  }
+  if (command === "sources") {
+    if (args[0] === "--help" || args[0] === "-h") {
+      console.log(sourcesHelp());
+      return 0;
+    }
+    const json = takeBool(args, "--json");
+    const format = parseAuditFormat(takeValue(args, "--format", ""), json);
+    const preset = takeValue(args, "--preset", args.length === 0 ? "all" : "");
+    assertPreset(preset);
+    assertNoUnknownFlags(args);
+    const discoveredFiles = preset ? await discoverPresetFiles(preset) : [];
+    const files = unique([...args, ...discoveredFiles]);
+    assertFilesFound(files, preset, "sources");
+    assertFiles(files);
+    const report = await analyzeInstructionSources(files);
+    report.preset = preset || null;
+    report.discoveredFiles = discoveredFiles;
+    if (format === "json") {
+      console.log(JSON.stringify(report, null, 2));
+    } else if (format === "markdown") {
+      console.log(formatSourcesMarkdown(report));
+    } else {
+      console.log(formatSourcesTable(report));
+    }
+    return 0;
   }
 
   throw new CliError("UNKNOWN_COMMAND", `unknown command: ${command ?? ""}`);
