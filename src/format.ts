@@ -1,4 +1,5 @@
 import type { AuditReport, RiskSummary, RuleCandidate, SimilarRuleCandidate, SurfaceOverlap } from "./audit.js";
+import type { DecisionReport } from "./decisions.js";
 import type { SourceReport } from "./sources.js";
 
 function riskText(candidate: RuleCandidate): string {
@@ -341,5 +342,81 @@ export function formatSourcesMarkdown(report: SourceReport): string {
   }
   lines.push("", "## Verdict", "");
   for (const verdict of sourceVerdictLines(report)) lines.push(`- ${escapeMarkdown(verdict)}`);
+  return lines.join("\n");
+}
+
+function openDecisionItems(report: DecisionReport): DecisionReport["items"] {
+  return report.items.filter((item) => item.status === "pending" || item.status === "stale");
+}
+
+function decisionTargetText(target: string | null): string {
+  return target ?? "-";
+}
+
+export function formatDecisionsTable(report: DecisionReport): string {
+  const lines: string[] = [];
+  lines.push(`ledger: ${report.ledgerPath}`);
+  lines.push(`source_strategy: ${report.sourceStrategy}`);
+  if (report.canonicalPath) lines.push(`canonical: ${report.canonicalPath}`);
+  lines.push(
+    `decisions: ${report.counts.total} total, ${report.counts.pending} pending, ${report.counts.stale} stale, ${report.counts.accepted} accepted`,
+  );
+
+  const items = openDecisionItems(report);
+  if (items.length === 0) {
+    lines.push("No pending or stale decision items.");
+    return lines.join("\n");
+  }
+
+  lines.push("Decision review items:");
+  const headers = ["id", "status", "signal", "subject", "target", "message"];
+  const rows = items.map((item) => [item.id, item.status, item.signal, item.subject, decisionTargetText(item.target), item.message]);
+  const widths = headers.map((header, index) => Math.max(header.length, ...rows.map((row) => row[index]?.length ?? 0)));
+  lines.push(headers.map((header, index) => header.padEnd(widths[index] ?? header.length)).join("  "));
+  lines.push(widths.map((width) => "-".repeat(width)).join("  "));
+  for (const row of rows) {
+    lines.push(row.map((value, index) => value.padEnd(widths[index] ?? value.length)).join("  "));
+  }
+  lines.push("", "Accept current items with:");
+  lines.push("rulemeter decisions --accept all");
+  return lines.join("\n");
+}
+
+export function formatDecisionsMarkdown(report: DecisionReport): string {
+  const lines: string[] = ["# RuleMeter Decision Ledger", ""];
+  lines.push(`- ledger: \`${report.ledgerPath}\``);
+  lines.push(`- source strategy: \`${report.sourceStrategy}\``);
+  lines.push(`- canonical: ${report.canonicalPath ? `\`${report.canonicalPath}\`` : "none"}`);
+  lines.push(`- decisions: ${report.counts.total} total`);
+  lines.push(`- pending: ${report.counts.pending}`);
+  lines.push(`- stale: ${report.counts.stale}`);
+  lines.push(`- accepted: ${report.counts.accepted}`);
+
+  const items = openDecisionItems(report);
+  if (items.length === 0) {
+    lines.push("", "No pending or stale decision items.");
+    return lines.join("\n");
+  }
+
+  lines.push("", "## Decision Review Items", "");
+  lines.push("| ID | Status | Signal | Subject | Target | Message |");
+  lines.push("|---|---|---|---|---|---|");
+  for (const item of items) {
+    lines.push(
+      `| ${[
+        `\`${escapeMarkdown(item.id)}\``,
+        escapeMarkdown(item.status),
+        escapeMarkdown(item.signal),
+        `\`${escapeMarkdown(item.subject)}\``,
+        item.target ? `\`${escapeMarkdown(item.target)}\`` : "-",
+        escapeMarkdown(item.message),
+      ].join(" | ")} |`,
+    );
+  }
+  lines.push("", "Accept current items with:");
+  lines.push("");
+  lines.push("```bash");
+  lines.push("rulemeter decisions --accept all");
+  lines.push("```");
   return lines.join("\n");
 }

@@ -53,7 +53,19 @@ try {
     throw new Error("sources smoke did not return a valid rulemeter.sources.v1 single_source payload");
   }
 
-  console.log(`install smoke ok: ${pack.name}@${pack.version} (${pack.entryCount} files, audit v2, sources v1)`);
+  writeFileSync(join(consumer, "GEMINI.md"), "- Gemini keeps a local override for this consumer smoke.\n", "utf8");
+  const decisionsOutput = run("npx", ["rulemeter", "decisions", "--json"], { cwd: consumer });
+  const decisions = JSON.parse(decisionsOutput);
+  if (decisions.schemaVersion !== "rulemeter.decisions.v1" || decisions.counts.pending !== 1) {
+    throw new Error("decisions smoke did not return a pending rulemeter.decisions.v1 payload");
+  }
+  const acceptedOutput = run("npx", ["rulemeter", "decisions", "--accept", "all", "--json"], { cwd: consumer });
+  const accepted = JSON.parse(acceptedOutput);
+  if (accepted.schemaVersion !== "rulemeter.decisions.v1" || accepted.counts.accepted !== 1 || accepted.counts.pending !== 0) {
+    throw new Error("decisions smoke did not accept current source warnings");
+  }
+
+  console.log(`install smoke ok: ${pack.name}@${pack.version} (${pack.entryCount} files, audit v2, sources v1, decisions v1)`);
 } finally {
   if (process.env.RULEMETER_KEEP_SMOKE_DIR) {
     console.log(`kept smoke directory: ${tempRoot}`);

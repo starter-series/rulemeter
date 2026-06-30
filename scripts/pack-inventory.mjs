@@ -7,6 +7,8 @@ export const expectedPackFiles = [
   "dist/cli.js",
   "dist/config.d.ts",
   "dist/config.js",
+  "dist/decisions.d.ts",
+  "dist/decisions.js",
   "dist/errors.d.ts",
   "dist/errors.js",
   "dist/format.d.ts",

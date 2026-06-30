@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -197,6 +197,38 @@ test("CLI sources emits source-of-truth topology JSON and Markdown", async () =>
   assert.match(markdown.stdout, /^# RuleMeter Source Topology/m);
   assert.match(markdown.stdout, /imports canonical/);
   assert.match(markdown.stdout, /review: GEMINI\.md differs from AGENTS\.md/);
+});
+
+test("CLI decisions writes owner ledger and fails on unaccepted source warnings", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "rulemeter-decisions-cli-test-"));
+  await writeFile(join(dir, "AGENTS.md"), "- Keep changes scoped and verify locally.\n", "utf8");
+  await writeFile(join(dir, "GEMINI.md"), "- Gemini keeps a local override.\n", "utf8");
+
+  await assert.rejects(
+    execFileAsync(process.execPath, [cliPath, "decisions", "--json", "--fail-on", "unaccepted"], { cwd: dir }),
+    (error) => {
+      const payload = JSON.parse(error.stdout);
+      assert.equal(error.code, 1);
+      assert.equal(payload.schemaVersion, "rulemeter.decisions.v1");
+      assert.equal(payload.counts.pending, 1);
+      assert.equal(payload.items[0].signal, "LOCAL_OVERRIDE");
+      assert.match(error.stderr, /--fail-on unaccepted matched/);
+      return true;
+    },
+  );
+
+  const accepted = await execFileAsync(process.execPath, [cliPath, "decisions", "--accept", "all", "--json"], { cwd: dir });
+  const payload = JSON.parse(accepted.stdout);
+  assert.equal(payload.counts.pending, 0);
+  assert.equal(payload.counts.accepted, 1);
+
+  const ledger = JSON.parse(await readFile(join(dir, ".rulemeter", "decisions.json"), "utf8"));
+  assert.equal(ledger.schemaVersion, "rulemeter.decisions.v1");
+  assert.equal(ledger.decisions.length, 1);
+
+  const markdown = await execFileAsync(process.execPath, [cliPath, "decisions", "--format", "markdown"], { cwd: dir });
+  assert.match(markdown.stdout, /^# RuleMeter Decision Ledger/m);
+  assert.match(markdown.stdout, /No pending or stale decision items/);
 });
 
 test("CLI audit reads config file", async () => {
