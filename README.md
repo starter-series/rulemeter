@@ -13,7 +13,7 @@ It helps maintainers review:
 - keyword-based review prompts that may deserve human attention
 - optional lexical near-duplicate drift candidates
 
-It does not rewrite files, compress prompts, guarantee safety coverage, prove that an instruction set is secure, or replace a human review. Treat the report as a review aid, not an AI safety/security linter or enforcement engine.
+It does not rewrite files, compress prompts, score an agent harness, auto-sync instruction files, guarantee safety coverage, prove that an instruction set is secure, or replace a human review. Treat the report as a review aid, not an AI safety/security linter, runtime guardrail, harness scorecard, or enforcement engine.
 
 ## Install
 
@@ -181,6 +181,7 @@ These are important safety rules, but the current keyword lint may not flag them
 - Cross-file duplicate text is summarized as `surfaceOverlaps` because different agents may need explicit parallel instructions.
 - Experimental similar-rule detection uses lexical overlap and is off by default. Treat `similarCandidates` as review prompts, not proof of semantic equivalence.
 - Risk findings are keyword-based and non-exhaustive; they can produce both false positives and false negatives.
+- RuleMeter does not score an agent harness, evaluate model behavior, run red-team attacks, or open automated rewrite PRs. It reviews instruction-file surfaces only.
 - Markdown code fences, tables, blockquotes, and indented code are skipped; RuleMeter focuses on prose/list instruction text.
 - Wrapped list items are joined before comparison so line wrapping does not create separate fragment rules.
 

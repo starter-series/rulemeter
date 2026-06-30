@@ -94,4 +94,4 @@ Treat these as validation targets, not product claims:
 
 If the corpus does not produce actionable review decisions, keep RuleMeter private or absorb it as an internal helper instead of publishing it as a standalone package.
 
-RuleMeter should be positioned as an agent instruction drift and duplicate review aid. Same-file duplicates are deletion candidates; cross-file surface overlaps are review prompts, not deletion instructions. Do not market RuleMeter as an AI safety/security linter, semantic prompt optimizer, or enforcement engine unless the implementation and corpus evidence change substantially.
+RuleMeter should be positioned as an agent instruction drift and duplicate review aid. Same-file duplicates are deletion candidates; cross-file surface overlaps are review prompts, not deletion instructions. Do not market RuleMeter as an AI safety/security linter, runtime guardrail, agent harness scorecard, semantic prompt optimizer, auto-sync PR bot, or enforcement engine unless the implementation and corpus evidence change substantially.
