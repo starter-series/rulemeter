@@ -203,6 +203,8 @@ npm audit --audit-level=high
 
 ## Release Decision
 
+Use [`docs/release-checklist.md`](docs/release-checklist.md) before any standalone publish or absorption decision.
+
 Do not publish the npm package or market RuleMeter as a standalone public tool until a private real-instruction corpus passes strict validation with every report finding manually labeled, no stale labels, and holdout usefulness measured separately. The default standalone-release policy requires same-file duplicates, cross-file surface overlaps, and risk summaries to be present and useful; a manifest can narrow `thresholds.requiredSignals` for internal-helper validation, but that narrowed pass is not standalone release evidence.
 
 The corpus should meet the evidence targets in `docs/validation.md`: same-file duplicate usefulness near 80%, surface-overlap usefulness near 60%, risk-summary usefulness near 60%, review item load at or below 20 report findings per 1,000 instruction lines, and risk load at or below 20 underlying risk findings per 1,000 instruction lines.

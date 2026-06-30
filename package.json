@@ -13,6 +13,7 @@
   },
   "files": [
     "dist",
+    "docs/release-checklist.md",
     "docs/validation.md",
     "scripts/collect-corpus.mjs",
     "scripts/validate-corpus.mjs",
