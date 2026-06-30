@@ -7,6 +7,7 @@ import { auditDocuments } from "../dist/index.js";
 const VALID_FORMATS = new Set(["json", "markdown"]);
 const VALID_SPLITS = new Set(["calibration", "holdout"]);
 const VALID_DECISIONS = new Set(["actionable", "noise", "unsafe", "missed", "unreviewed"]);
+const VALID_REQUIRED_SIGNALS = new Set(["duplicate", "surface_overlap", "risk_summary"]);
 const DEFAULT_THRESHOLDS = {
   minDocuments: 20,
   minRoots: 4,
@@ -15,11 +16,39 @@ const DEFAULT_THRESHOLDS = {
   minDuplicateUsefulRate: 0.8,
   minSurfaceOverlapUsefulRate: 0.6,
   minRiskUsefulRate: 0.6,
+  requiredSignals: ["duplicate", "surface_overlap", "risk_summary"],
+};
+
+const SIGNALS = {
+  duplicate: {
+    key: "duplicate",
+    findingKind: "duplicate",
+    label: "duplicate",
+    threshold: "minDuplicateUsefulRate",
+  },
+  surfaceOverlap: {
+    key: "surfaceOverlap",
+    findingKind: "surface_overlap",
+    label: "surface-overlap",
+    threshold: "minSurfaceOverlapUsefulRate",
+  },
+  risk: {
+    key: "risk",
+    findingKind: "risk_summary",
+    label: "risk-summary",
+    threshold: "minRiskUsefulRate",
+  },
+  similar: {
+    key: "similar",
+    findingKind: "similar",
+    label: "similar",
+    threshold: null,
+  },
 };
 
 function usage() {
   return `Usage
-  node scripts/validate-corpus.mjs --manifest PATH [--format json|markdown] [--out PATH] [--include-text] [--experimental-similar] [--strict]
+  node scripts/validate-corpus.mjs --manifest PATH [--format json|markdown] [--out PATH] [--labels PATH] [--label-template PATH] [--include-text] [--experimental-similar] [--strict]
 
 The manifest points to real local instruction files. Corpus contents are not committed by this script.`;
 }
@@ -49,6 +78,8 @@ function parseArgs(argv) {
   const format = takeValue(args, "--format", "json");
   if (!VALID_FORMATS.has(format)) throw new UsageError("--format must be one of: json, markdown");
   const out = takeValue(args, "--out", "");
+  const labels = takeValue(args, "--labels", "");
+  const labelTemplate = takeValue(args, "--label-template", "");
   const includeText = takeBool(args, "--include-text");
   const includeSimilar = takeBool(args, "--experimental-similar");
   const strict = takeBool(args, "--strict");
@@ -58,7 +89,7 @@ function parseArgs(argv) {
   }
   const unknown = args.find((arg) => arg.startsWith("--"));
   if (unknown) throw new UsageError(`unknown flag: ${unknown}`);
-  return { manifest, format, out, includeText, includeSimilar, strict, similarityThreshold };
+  return { manifest, format, out, labels, labelTemplate, includeText, includeSimilar, strict, similarityThreshold };
 }
 
 function fingerprint(payload) {
@@ -96,6 +127,22 @@ function labelMap(labels) {
     map.set(label.fingerprint, { decision: label.decision, note: label.note });
   }
   return map;
+}
+
+function normalizeSignal(signal) {
+  if (signal === "surfaceOverlap") return "surface_overlap";
+  if (signal === "risk") return "risk_summary";
+  return signal;
+}
+
+function requiredSignals(thresholds) {
+  const signals = thresholds.requiredSignals ?? DEFAULT_THRESHOLDS.requiredSignals;
+  if (!Array.isArray(signals)) throw new UsageError("thresholds.requiredSignals must be an array");
+  const normalized = signals.map(normalizeSignal);
+  for (const signal of normalized) {
+    if (!VALID_REQUIRED_SIGNALS.has(signal)) throw new UsageError(`invalid required signal: ${signal}`);
+  }
+  return new Set(normalized);
 }
 
 function splitFor(occurrences, splitById) {
@@ -271,7 +318,54 @@ function addUsefulRateWarning(warnings, label, rate, threshold) {
   }
 }
 
-function corpusWarnings({ documents, roots, splitCounts, findings, labelStats, riskFindingCount, staleLabels, thresholds, totalLines, usefulRates, usefulRatesBySplit }) {
+function signalStatus({ findingCounts, findingsByKind, required, usefulRates, usefulRatesBySplit, decisionsBySplit }) {
+  const statuses = {};
+  for (const signal of Object.values(SIGNALS)) {
+    const findingCount = findingCounts[signal.key] ?? 0;
+    const holdoutCount = decisionsBySplit[signal.key]?.holdout
+      ? Object.values(decisionsBySplit[signal.key].holdout).reduce((sum, count) => sum + count, 0)
+      : 0;
+    statuses[signal.key] = {
+      signal: signal.findingKind,
+      required: required.has(signal.findingKind),
+      findings: findingCount,
+      reportFindings: findingsByKind[signal.findingKind] ?? 0,
+      holdoutFindings: holdoutCount,
+      usefulRate: usefulRates[signal.key],
+      holdoutUsefulRate: usefulRatesBySplit[signal.key]?.holdout ?? null,
+      active: findingCount > 0 || (findingsByKind[signal.findingKind] ?? 0) > 0,
+    };
+  }
+  return statuses;
+}
+
+function addSignalWarnings(warnings, { signal, status, thresholds, usefulRatesBySplit }) {
+  if (!signal.threshold) return;
+  const threshold = thresholds[signal.threshold];
+  if (!status.active && !status.required) return;
+  if (!status.active && status.required) {
+    warnings.push(`${signal.label} signal is required but produced no report findings`);
+    return;
+  }
+  addUsefulRateWarning(warnings, signal.label, status.usefulRate, threshold);
+  if (status.required || status.holdoutFindings > 0) {
+    addUsefulRateWarning(warnings, `holdout ${signal.label}`, usefulRatesBySplit[signal.key]?.holdout, threshold);
+  }
+}
+
+function corpusWarnings({
+  documents,
+  roots,
+  splitCounts,
+  findings,
+  labelStats,
+  riskFindingCount,
+  staleLabels,
+  thresholds,
+  totalLines,
+  usefulRatesBySplit,
+  signalStatuses,
+}) {
   const warnings = [];
   if (documents.length < thresholds.minDocuments) {
     warnings.push(`corpus has ${documents.length} documents; target is at least ${thresholds.minDocuments}`);
@@ -298,13 +392,21 @@ function corpusWarnings({ documents, roots, splitCounts, findings, labelStats, r
   if (riskPerKloc > thresholds.maxRiskFindingsPerKloc) {
     warnings.push(`risk finding load is ${riskPerKloc.toFixed(1)} per 1,000 lines; target is at most ${thresholds.maxRiskFindingsPerKloc}`);
   }
-  addUsefulRateWarning(warnings, "duplicate", usefulRates.duplicate, thresholds.minDuplicateUsefulRate);
-  addUsefulRateWarning(warnings, "surface-overlap", usefulRates.surfaceOverlap, thresholds.minSurfaceOverlapUsefulRate);
-  addUsefulRateWarning(warnings, "risk-summary", usefulRates.risk, thresholds.minRiskUsefulRate);
   if ((splitCounts.holdout ?? 0) > 0) {
-    addUsefulRateWarning(warnings, "holdout duplicate", usefulRatesBySplit.duplicate.holdout, thresholds.minDuplicateUsefulRate);
-    addUsefulRateWarning(warnings, "holdout surface-overlap", usefulRatesBySplit.surfaceOverlap.holdout, thresholds.minSurfaceOverlapUsefulRate);
-    addUsefulRateWarning(warnings, "holdout risk-summary", usefulRatesBySplit.risk.holdout, thresholds.minRiskUsefulRate);
+    for (const signal of Object.values(SIGNALS)) {
+      addSignalWarnings(warnings, { signal, status: signalStatuses[signal.key], thresholds, usefulRatesBySplit });
+    }
+  } else {
+    for (const signal of Object.values(SIGNALS)) {
+      if (!signal.threshold) continue;
+      const status = signalStatuses[signal.key];
+      if (!status.active && !status.required) continue;
+      if (!status.active && status.required) {
+        warnings.push(`${signal.label} signal is required but produced no report findings`);
+      } else {
+        addUsefulRateWarning(warnings, signal.label, status.usefulRate, thresholds[signal.threshold]);
+      }
+    }
   }
   return warnings;
 }
@@ -326,6 +428,7 @@ function markdownReport(payload) {
     `- stale labels: ${payload.metrics.labelCoverage.stale}`,
     `- review item load: ${payload.metrics.reviewItemsPerKloc} per 1,000 lines`,
     `- risk finding load: ${payload.metrics.riskFindingsPerKloc} per 1,000 lines`,
+    `- required signals: ${payload.metrics.requiredSignals.join(", ") || "none"}`,
     `- holdout duplicate useful rate: ${formatRate(payload.metrics.usefulRatesBySplit.duplicate.holdout)}`,
     `- holdout surface-overlap useful rate: ${formatRate(payload.metrics.usefulRatesBySplit.surfaceOverlap.holdout)}`,
     `- holdout risk-summary useful rate: ${formatRate(payload.metrics.usefulRatesBySplit.risk.holdout)}`,
@@ -351,6 +454,39 @@ function markdownReport(payload) {
   return `${lines.join("\n")}\n`;
 }
 
+function signalForFinding(finding) {
+  if (finding.kind === "duplicate") return finding.recommendation;
+  if (finding.kind === "risk_summary") return finding.risk;
+  if (finding.kind === "surface_overlap") return finding.recommendation;
+  if (finding.kind === "similar") return finding.recommendation;
+  return "";
+}
+
+function labelTemplate(payload) {
+  const labels = {};
+  for (const finding of payload.findings) {
+    labels[finding.fingerprint] = {
+      decision: finding.decision,
+      note: finding.note ?? "",
+      kind: finding.kind,
+      split: finding.split,
+      splits: finding.splits,
+      signal: signalForFinding(finding),
+      locations: finding.locationText,
+    };
+  }
+  return `${JSON.stringify(
+    {
+      schemaVersion: "rulemeter.validation.labels.v1",
+      manifestPath: payload.manifestPath,
+      labels,
+      staleLabels: payload.staleLabels,
+    },
+    null,
+    2,
+  )}\n`;
+}
+
 async function loadManifest(path) {
   const resolved = resolve(path);
   const manifest = JSON.parse(await readFile(resolved, "utf8"));
@@ -363,10 +499,20 @@ async function loadManifest(path) {
   return { manifest, path: resolved, directory: dirname(resolved) };
 }
 
+async function loadLabelsFile(path) {
+  if (!path) return {};
+  const labelsPath = resolve(path);
+  const parsed = JSON.parse(await readFile(labelsPath, "utf8"));
+  if (isRecord(parsed.labels)) return parsed.labels;
+  if (isRecord(parsed)) return parsed;
+  throw new UsageError("--labels must point to a labels object or a label-template file");
+}
+
 async function buildPayload(options) {
   const loaded = await loadManifest(options.manifest);
   const thresholds = { ...DEFAULT_THRESHOLDS, ...(loaded.manifest.thresholds ?? {}) };
-  const labels = labelMap(loaded.manifest.labels);
+  const required = requiredSignals(thresholds);
+  const labels = labelMap({ ...(loaded.manifest.labels ?? {}), ...(await loadLabelsFile(options.labels)) });
   const splitById = new Map();
   const roots = new Set();
   const splitCounts = {};
@@ -403,6 +549,12 @@ async function buildPayload(options) {
   const surfaceOverlapCounts = decisionCounts(findings.filter((finding) => finding.kind === "surface_overlap"));
   const riskSummaryCounts = decisionCounts(findings.filter((finding) => finding.kind === "risk_summary"));
   const similarCounts = decisionCounts(findings.filter((finding) => finding.kind === "similar"));
+  const findingsByKind = {
+    duplicate: findings.filter((finding) => finding.kind === "duplicate").length,
+    surface_overlap: findings.filter((finding) => finding.kind === "surface_overlap").length,
+    risk_summary: findings.filter((finding) => finding.kind === "risk_summary").length,
+    similar: findings.filter((finding) => finding.kind === "similar").length,
+  };
   const duplicateSplitCounts = decisionCountsBySplit(findings.filter((finding) => finding.kind === "duplicate"));
   const surfaceOverlapSplitCounts = decisionCountsBySplit(findings.filter((finding) => finding.kind === "surface_overlap"));
   const riskSummarySplitCounts = decisionCountsBySplit(findings.filter((finding) => finding.kind === "risk_summary"));
@@ -419,6 +571,26 @@ async function buildPayload(options) {
     risk: usefulRatesBySplit(riskSummarySplitCounts),
     similar: usefulRatesBySplit(similarSplitCounts),
   };
+  const findingCounts = {
+    duplicate: report.candidates.length,
+    surfaceOverlap: report.surfaceOverlaps.length,
+    risk: report.riskSummaries.length,
+    similar: report.similarCandidates.length,
+  };
+  const decisionSplits = {
+    duplicate: duplicateSplitCounts,
+    surfaceOverlap: surfaceOverlapSplitCounts,
+    risk: riskSummarySplitCounts,
+    similar: similarSplitCounts,
+  };
+  const statuses = signalStatus({
+    findingCounts,
+    findingsByKind,
+    required,
+    usefulRates,
+    usefulRatesBySplit: splitUsefulRates,
+    decisionsBySplit: decisionSplits,
+  });
   const findingFingerprints = new Set(findings.map((finding) => finding.fingerprint));
   const staleLabels = [...labels.keys()].filter((label) => !findingFingerprints.has(label)).sort();
   const labelStats = labelCoverage(findings, staleLabels);
@@ -432,14 +604,15 @@ async function buildPayload(options) {
       splitCounts,
     },
     metrics: {
+      requiredSignals: [...required],
       reviewItemsPerKloc: Number(perKloc(findings.length, totalLines).toFixed(1)),
       riskFindingsPerKloc: Number(perKloc(report.riskFindings.length, totalLines).toFixed(1)),
       byKind: {
-        duplicate: report.candidates.length,
-        surfaceOverlap: report.surfaceOverlaps.length,
+        duplicate: findingCounts.duplicate,
+        surfaceOverlap: findingCounts.surfaceOverlap,
         risk: report.riskFindings.length,
-        riskSummary: report.riskSummaries.length,
-        similar: report.similarCandidates.length,
+        riskSummary: findingCounts.risk,
+        similar: findingCounts.similar,
       },
       decisions: {
         duplicate: duplicateCounts,
@@ -447,13 +620,9 @@ async function buildPayload(options) {
         risk: riskSummaryCounts,
         similar: similarCounts,
       },
-      decisionsBySplit: {
-        duplicate: duplicateSplitCounts,
-        surfaceOverlap: surfaceOverlapSplitCounts,
-        risk: riskSummarySplitCounts,
-        similar: similarSplitCounts,
-      },
+      decisionsBySplit: decisionSplits,
       labelCoverage: labelStats,
+      signalStatus: statuses,
       usefulRates: {
         duplicate: usefulRates.duplicate,
         surfaceOverlap: usefulRates.surfaceOverlap,
@@ -478,6 +647,7 @@ async function buildPayload(options) {
     totalLines,
     usefulRates,
     usefulRatesBySplit: splitUsefulRates,
+    signalStatuses: statuses,
   });
   return payload;
 }
@@ -495,6 +665,10 @@ async function main() {
     await writeFile(options.out, output, "utf8");
   } else {
     process.stdout.write(output);
+  }
+  if (options.labelTemplate) {
+    await mkdir(dirname(resolve(options.labelTemplate)), { recursive: true });
+    await writeFile(options.labelTemplate, labelTemplate(payload), "utf8");
   }
   return options.strict && payload.warnings.length > 0 ? 1 : 0;
 }

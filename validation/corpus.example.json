@@ -4,9 +4,12 @@
   "thresholds": {
     "minDocuments": 20,
     "minRoots": 4,
+    "maxReviewItemsPerKloc": 20,
     "maxRiskFindingsPerKloc": 20,
     "minDuplicateUsefulRate": 0.8,
-    "minRiskUsefulRate": 0.6
+    "minSurfaceOverlapUsefulRate": 0.6,
+    "minRiskUsefulRate": 0.6,
+    "requiredSignals": ["duplicate", "surface_overlap", "risk_summary"]
   },
   "documents": [
     {

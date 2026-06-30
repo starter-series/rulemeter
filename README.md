@@ -197,11 +197,13 @@ npm audit --audit-level=high
 
 `smoke:install` packs the current checkout into a local tarball, installs that tarball in a temporary consumer project with package lifecycle scripts disabled, and verifies the installed `rulemeter` binary. This keeps release validation useful even when npm publication is deferred.
 
-`validate:corpus` runs a non-strict smoke of the corpus validation harness against `validation/corpus.example.json`. CI runs it to catch script rot, not to claim product usefulness. For real validation, pass a private manifest of owned instruction files to `scripts/validate-corpus.mjs`; see `docs/validation.md`.
+`validate:corpus` runs a non-strict smoke of the corpus validation harness against `validation/corpus.example.json`. CI runs it to catch script rot, not to claim product usefulness. For real validation, generate or maintain a private manifest of owned instruction files with `scripts/collect-corpus.mjs`, pass it to `scripts/validate-corpus.mjs`, use `--label-template` to create a private review file for current fingerprints, and feed reviewed labels back with `--labels`. See `docs/validation.md`.
 
 ## Release Decision
 
-Do not publish the npm package or market RuleMeter as a standalone public tool until a private real-instruction corpus passes strict validation with every report finding manually labeled, no stale labels, and holdout usefulness measured separately. The corpus should meet the evidence targets in `docs/validation.md`: same-file duplicate usefulness near 80%, surface-overlap usefulness near 60%, risk-summary usefulness near 60%, review item load at or below 20 report findings per 1,000 instruction lines, and risk load at or below 20 underlying risk findings per 1,000 instruction lines.
+Do not publish the npm package or market RuleMeter as a standalone public tool until a private real-instruction corpus passes strict validation with every report finding manually labeled, no stale labels, and holdout usefulness measured separately. The default standalone-release policy requires same-file duplicates, cross-file surface overlaps, and risk summaries to be present and useful; a manifest can narrow `thresholds.requiredSignals` for internal-helper validation, but that narrowed pass is not standalone release evidence.
+
+The corpus should meet the evidence targets in `docs/validation.md`: same-file duplicate usefulness near 80%, surface-overlap usefulness near 60%, risk-summary usefulness near 60%, review item load at or below 20 report findings per 1,000 instruction lines, and risk load at or below 20 underlying risk findings per 1,000 instruction lines.
 
 If those targets do not hold, keep RuleMeter private or absorb it into `create-starter audit-agent-rules` as an internal helper instead of publishing it as a standalone package.
 
