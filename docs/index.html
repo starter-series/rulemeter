@@ -67,6 +67,9 @@ same-file duplicate actions: 1
 cross-file overlap reviews: 3
 keyword review groups: 3
 
+rulemeter sources
+strategy: single_source
+
 next: paste report into PR review
 standalone: deferred</code></pre>
         </div>
@@ -88,13 +91,13 @@ standalone: deferred</code></pre>
           </li>
           <li>
             <span>02</span>
-            <strong data-i18n="workflow.step2.title">Review exact duplicates</strong>
-            <p data-i18n="workflow.step2.body">Find normalized repeated instruction text without rewriting source files.</p>
+            <strong data-i18n="workflow.step2.title">Check source topology</strong>
+            <p data-i18n="workflow.step2.body">Detect symlink, import, byte-identical mirror, and local override relationships without semantic guessing.</p>
           </li>
           <li>
             <span>03</span>
-            <strong data-i18n="workflow.step3.title">Keep risky rules explicit</strong>
-            <p data-i18n="workflow.step3.body">Surface keyword matches for human review, with known blind spots documented.</p>
+            <strong data-i18n="workflow.step3.title">Review exact duplicates</strong>
+            <p data-i18n="workflow.step3.body">Find normalized repeated instruction text without rewriting source files.</p>
           </li>
         </ol>
       </section>
@@ -102,6 +105,10 @@ standalone: deferred</code></pre>
       <section id="signals" class="section compact">
         <h2 data-i18n="signals.title">What the report separates</h2>
         <div class="signal-grid">
+          <article>
+            <h3 data-i18n="signals.sources.title">Source topology</h3>
+            <p data-i18n="signals.sources.body">Checks whether instruction files use a single source, symlink, import, mirror, or local override pattern.</p>
+          </article>
           <article>
             <h3 data-i18n="signals.duplicates.title">Duplicates and overlaps</h3>
             <p data-i18n="signals.duplicates.body">Separates same-file removal candidates from cross-file parity or consolidation prompts.</p>

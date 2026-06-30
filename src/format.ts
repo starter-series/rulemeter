@@ -1,4 +1,5 @@
 import type { AuditReport, RiskSummary, RuleCandidate, SimilarRuleCandidate, SurfaceOverlap } from "./audit.js";
+import type { SourceReport } from "./sources.js";
 
 function riskText(candidate: RuleCandidate): string {
   return candidate.risks.length > 0 ? candidate.risks.map(labelText).join(", ") : "none";
@@ -268,5 +269,77 @@ export function formatAuditMarkdown(report: AuditReport): string {
       );
     }
   }
+  return lines.join("\n");
+}
+
+function sourceImportsText(imports: SourceReport["files"][number]["imports"]): string {
+  if (imports.length === 0) return "-";
+  return imports.map((reference) => `@${reference.specifier}`).join(", ");
+}
+
+function sourceSymlinkText(file: SourceReport["files"][number]): string {
+  return file.symlinkTarget ?? "-";
+}
+
+function sourceRoleText(role: SourceReport["files"][number]["role"]): string {
+  if (role === "canonical") return "canonical";
+  if (role === "import_alias") return "imports canonical";
+  if (role === "symlink_alias") return "symlink alias";
+  if (role === "verbatim_mirror") return "verbatim mirror";
+  return "local override";
+}
+
+function sourceVerdictLines(report: SourceReport): string[] {
+  if (report.sourceStrategy === "standalone") return ["ok: one instruction source found"];
+  if (report.sourceStrategy === "single_source") return ["ok: single source strategy detected"];
+  const lines = report.warnings.map((warning) => `review: ${warning.message}`);
+  return lines.length > 0 ? lines : ["review: source strategy is unresolved"];
+}
+
+export function formatSourcesTable(report: SourceReport): string {
+  const lines: string[] = [];
+  if (report.preset) lines.push(`preset: ${report.preset}`);
+  if (report.discoveredFiles && report.discoveredFiles.length > 0) {
+    lines.push(`discovered_files: ${report.discoveredFiles.join(", ")}`);
+  }
+  lines.push("Instruction source topology:");
+  const headers = ["path", "role", "symlink", "imports", "evidence"];
+  const rows = report.files.map((file) => [file.path, sourceRoleText(file.role), sourceSymlinkText(file), sourceImportsText(file.imports), file.evidence]);
+  const widths = headers.map((header, index) => Math.max(header.length, ...rows.map((row) => row[index]?.length ?? 0)));
+  lines.push(headers.map((header, index) => header.padEnd(widths[index] ?? header.length)).join("  "));
+  lines.push(widths.map((width) => "-".repeat(width)).join("  "));
+  for (const row of rows) {
+    lines.push(row.map((value, index) => value.padEnd(widths[index] ?? value.length)).join("  "));
+  }
+  lines.push("", "Verdict:");
+  for (const verdict of sourceVerdictLines(report)) lines.push(`- ${verdict}`);
+  return lines.join("\n");
+}
+
+export function formatSourcesMarkdown(report: SourceReport): string {
+  const lines: string[] = ["# RuleMeter Source Topology", ""];
+  if (report.preset) lines.push(`- preset: \`${report.preset}\``);
+  lines.push(`- files: ${report.files.length}`);
+  lines.push(`- canonical: ${report.canonicalPath ? `\`${report.canonicalPath}\`` : "none"}`);
+  lines.push(`- strategy: \`${report.sourceStrategy}\``);
+  if (report.discoveredFiles && report.discoveredFiles.length > 0) {
+    lines.push(`- discovered files: ${report.discoveredFiles.map((file) => `\`${file}\``).join(", ")}`);
+  }
+  lines.push("", "## Instruction Source Topology", "");
+  lines.push("| Path | Role | Symlink | Imports | Evidence |");
+  lines.push("|---|---|---|---|---|");
+  for (const file of report.files) {
+    lines.push(
+        `| ${[
+          `\`${escapeMarkdown(file.path)}\``,
+        escapeMarkdown(sourceRoleText(file.role)),
+        escapeMarkdown(sourceSymlinkText(file)),
+        escapeMarkdown(sourceImportsText(file.imports)),
+        escapeMarkdown(file.evidence),
+      ].join(" | ")} |`,
+    );
+  }
+  lines.push("", "## Verdict", "");
+  for (const verdict of sourceVerdictLines(report)) lines.push(`- ${escapeMarkdown(verdict)}`);
   return lines.join("\n");
 }

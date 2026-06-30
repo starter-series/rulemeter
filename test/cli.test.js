@@ -180,6 +180,25 @@ test("CLI reports typed unknown count command error", async () => {
   );
 });
 
+test("CLI sources emits source-of-truth topology JSON and Markdown", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "rulemeter-sources-cli-test-"));
+  await writeFile(join(dir, "AGENTS.md"), "- Keep changes scoped and verify locally.\n", "utf8");
+  await writeFile(join(dir, "CLAUDE.md"), "@AGENTS.md\n", "utf8");
+  await writeFile(join(dir, "GEMINI.md"), "- Gemini has a local override.\n", "utf8");
+
+  const json = await execFileAsync(process.execPath, [cliPath, "sources", "--json"], { cwd: dir });
+  const payload = JSON.parse(json.stdout);
+  assert.equal(payload.schemaVersion, "rulemeter.sources.v1");
+  assert.equal(payload.canonicalPath, "AGENTS.md");
+  assert.equal(payload.files.find((file) => file.path === "CLAUDE.md").role, "import_alias");
+  assert.equal(payload.files.find((file) => file.path === "GEMINI.md").role, "local_override");
+
+  const markdown = await execFileAsync(process.execPath, [cliPath, "sources", "--format", "markdown"], { cwd: dir });
+  assert.match(markdown.stdout, /^# RuleMeter Source Topology/m);
+  assert.match(markdown.stdout, /imports canonical/);
+  assert.match(markdown.stdout, /review: GEMINI\.md differs from AGENTS\.md/);
+});
+
 test("CLI audit reads config file", async () => {
   const path = await fixture();
   const dir = await mkdtemp(join(tmpdir(), "rulemeter-config-test-"));

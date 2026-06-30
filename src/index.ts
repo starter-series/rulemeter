@@ -21,7 +21,15 @@ export {
 } from "./audit.js";
 export { loadRulemeterConfig, loadRulemeterConfigWithMeta, type LoadedRulemeterConfig, type RulemeterConfig } from "./config.js";
 export { RulemeterError } from "./errors.js";
-export { formatAuditMarkdown, formatAuditTable } from "./format.js";
+export { formatAuditMarkdown, formatAuditTable, formatSourcesMarkdown, formatSourcesTable } from "./format.js";
 export { discoverPresetFiles, presetNames, type PresetName } from "./presets.js";
 export { classifyRisks, highRiskLabels, isHighRisk, riskRules, type RiskLabel } from "./risk.js";
-export { AUDIT_SCHEMA_VERSION, DISCOVERY_SCHEMA_VERSION, ERROR_SCHEMA_VERSION, type RulemeterWarning } from "./schema.js";
+export {
+  analyzeInstructionSources,
+  type SourceFile,
+  type SourceImportReference,
+  type SourceReport,
+  type SourceRole,
+  type SourceStrategy,
+} from "./sources.js";
+export { AUDIT_SCHEMA_VERSION, DISCOVERY_SCHEMA_VERSION, ERROR_SCHEMA_VERSION, SOURCES_SCHEMA_VERSION, type RulemeterWarning } from "./schema.js";
