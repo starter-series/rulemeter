@@ -55,7 +55,7 @@ function duplicateActionText(candidate: RuleCandidate): string {
 }
 
 function overlapActionText(overlap: SurfaceOverlap): string {
-  return overlap.recommendation === "keep_explicit" ? "Keep explicit in each surface" : "Review for parity or drift";
+  return overlap.recommendation === "keep_explicit" ? "Keep explicit in each surface" : "Review for parity or consolidation";
 }
 
 function similarActionText(candidate: SimilarRuleCandidate): string {
