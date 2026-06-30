@@ -21,6 +21,9 @@ export const expectedPackFiles = [
   "dist/schema.js",
   "docs/validation.md",
   "package.json",
+  "scripts/collect-corpus.mjs",
+  "scripts/validate-corpus.mjs",
+  "validation/corpus.example.json",
 ].sort();
 
 export function assertPackInventory(pack) {

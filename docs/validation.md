@@ -8,20 +8,26 @@ The validation harness reads a local manifest of real instruction files, runs Ru
 
 ```bash
 npm run validate:corpus
+node scripts/collect-corpus.mjs --root ~/IdeaProjects --out /tmp/rulemeter-real-corpus/manifest.json
 node scripts/validate-corpus.mjs --manifest validation/corpus.example.json --format markdown
 node scripts/validate-corpus.mjs --manifest /path/to/private-corpus.json --format json --out validation-result.json
-node scripts/validate-corpus.mjs --manifest /path/to/private-corpus.json --format markdown --strict
+node scripts/validate-corpus.mjs --manifest /path/to/private-corpus.json --format json --label-template labels.review.json
+node scripts/validate-corpus.mjs --manifest /path/to/private-corpus.json --labels labels.review.json --format markdown --strict
 ```
 
 Use `--include-text` only for local review artifacts that will not be published.
 
 Use `--strict` when the manifest should fail CI if validation warnings remain. Strict mode exits non-zero for warnings such as too few documents, too few roots, missing holdout files, any unlabeled report findings, stale labels, or usefulness targets that cannot be measured from reviewed labels.
 
+By default, strict validation requires the standalone-release signals: `duplicate`, `surface_overlap`, and `risk_summary`. A private manifest can narrow this with `thresholds.requiredSignals`, for example `["surface_overlap", "risk_summary"]`, when evaluating RuleMeter only as an internal helper. A narrowed pass is not standalone product evidence.
+
 ## CI Smoke Vs Release Evidence
 
 `npm run validate:corpus` intentionally uses `validation/corpus.example.json` without `--strict`. It belongs in CI as a smoke test so the validation harness does not rot.
 
 Standalone release evidence must come from a private manifest of owned real instruction files run with `--strict`. Do not use the example corpus as a product-readiness signal.
+
+Use `scripts/collect-corpus.mjs` to regenerate a private manifest from a local workspace when `/tmp` artifacts disappear. The collector discovers common agent instruction files, skips generated/test/fixture folders, preserves existing `labels` from the output manifest when present, and writes paths only.
 
 ## Manifest
 
@@ -52,6 +58,8 @@ Paths may be absolute or relative to the manifest file. Keep real corpus manifes
 
 After the first run, review `findings[]` in the JSON or Markdown report. Each finding has a stable `fingerprint`, `kind`, `split`, `splits`, `decision`, signal fields such as `recommendation` or `risk`, and file locations. By default the harness omits raw text; use locations to open the source file, or pass `--include-text` only for local private review artifacts.
 
+Use `--label-template labels.review.json` to generate a private review file keyed by current fingerprints. The template includes kind, split, signal, and locations, but not raw instruction text. After filling in decisions, pass that file back with `--labels labels.review.json`. Labels in an external labels file are merged with manifest labels and take precedence for matching fingerprints.
+
 Add labels by fingerprint:
 
 ```json
@@ -76,6 +84,7 @@ Treat these as validation targets, not product claims:
 - at least 20 real instruction documents
 - at least 4 distinct roots
 - at least one locked holdout split
+- required standalone-release signals present: same-file duplicates, cross-file surface overlaps, and risk summaries
 - duplicate usefulness rate near 80% after manual review
 - surface-overlap usefulness rate near 60% after manual review
 - risk-summary usefulness rate near 60% after manual review
