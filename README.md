@@ -2,7 +2,7 @@
 
 > Status: Lab — standalone validation before possible `create-starter audit-agent-rules` absorption.
 
-`RuleMeter` is a report-only review aid for agent instruction drift and duplicate text in files such as `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and Copilot instruction files.
+`RuleMeter` is a report-only review aid for exact and lexical agent-instruction drift, same-file duplicate text, and cross-file surface overlap in files such as `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and Copilot instruction files.
 
 Website: https://starter-series.github.io/rulemeter/
 
@@ -109,7 +109,7 @@ rulemeter audit --preset all --experimental-similar
 rulemeter audit --preset all --experimental-similar --similarity-threshold 0.8
 ```
 
-The default similarity threshold is `0.65`. `similarCandidates` are review prompts, not automatic semantic dedupe.
+The default similarity threshold is `0.65`. `similarCandidates` are lexical review prompts, not automatic semantic dedupe. They work best when instructions still share most important words, and can miss semantically related rewrites that use different vocabulary.
 
 ## Presets
 
@@ -180,6 +180,7 @@ These are important safety rules, but the current keyword lint may not flag them
 - RuleMeter's default duplicate recommendations only group exact normalized same-file duplicate text.
 - Cross-file duplicate text is summarized as `surfaceOverlaps` because different agents may need explicit parallel instructions.
 - Experimental similar-rule detection uses lexical overlap and is off by default. Treat `similarCandidates` as review prompts, not proof of semantic equivalence.
+- Similar-rule detection can catch near repeats such as reordered shared wording, but it can miss meaning-preserving rewrites that swap most vocabulary. Do not use it as a semantic drift detector.
 - Risk findings are keyword-based and non-exhaustive; they can produce both false positives and false negatives.
 - RuleMeter does not score an agent harness, evaluate model behavior, run red-team attacks, or open automated rewrite PRs. It reviews instruction-file surfaces only.
 - Markdown code fences, tables, blockquotes, and indented code are skipped; RuleMeter focuses on prose/list instruction text.
