@@ -31,6 +31,7 @@
       <nav class="nav" aria-label="Primary">
         <a href="#workflow" data-i18n="nav.workflow">Workflow</a>
         <a href="#signals" data-i18n="nav.signals">Signals</a>
+        <a href="#evidence" data-i18n="nav.evidence">Evidence</a>
         <a href="#install" data-i18n="nav.install">Install</a>
       </nav>
       <div class="language-switcher" aria-label="Language">
@@ -64,12 +65,12 @@
 files: 15
 risk findings: 6
 risk summaries: 3
-duplicate candidates: 1
+duplicate candidates: 0
 surface overlaps: 3
 similar candidates: 7
 
-SURF_01 review_duplicate low
-risk: test_required</code></pre>
+verdict: internal-helper ready
+standalone: deferred</code></pre>
         </div>
       </section>
 
@@ -122,11 +123,55 @@ risk: test_required</code></pre>
         </div>
       </section>
 
+      <section id="evidence" class="section evidence">
+        <div>
+          <h2 data-i18n="evidence.title">Evidence before product claims.</h2>
+          <p data-i18n="evidence.body">
+            A private real-instruction corpus currently supports the internal-helper path, not a standalone public product claim.
+          </p>
+        </div>
+        <div class="evidence-panel">
+          <div class="verdict">
+            <span data-i18n="evidence.verdict.label">Current verdict</span>
+            <strong data-i18n="evidence.verdict.value">Internal-helper ready; standalone deferred.</strong>
+            <p data-i18n="evidence.verdict.body">
+              The standalone gate still fails because the real corpus produced no same-file duplicate signal.
+            </p>
+          </div>
+          <dl class="metrics">
+            <div>
+              <dt data-i18n="evidence.docs.label">Corpus</dt>
+              <dd data-i18n="evidence.docs.value">67 docs / 53 roots / 13 holdout</dd>
+            </div>
+            <div>
+              <dt data-i18n="evidence.surface.label">Surface overlap usefulness</dt>
+              <dd>0.957 / 0.889 holdout</dd>
+            </div>
+            <div>
+              <dt data-i18n="evidence.risk.label">Risk-summary usefulness</dt>
+              <dd>0.857 / 0.800 holdout</dd>
+            </div>
+            <div>
+              <dt data-i18n="evidence.duplicate.label">Same-file duplicate signal</dt>
+              <dd data-i18n="evidence.duplicate.value">0 findings</dd>
+            </div>
+            <div>
+              <dt data-i18n="evidence.load.label">Review load</dt>
+              <dd>8.4 items / 1k lines</dd>
+            </div>
+            <div>
+              <dt data-i18n="evidence.riskload.label">Risk load</dt>
+              <dd>18.9 findings / 1k lines</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
       <section id="install" class="section install">
         <div>
-          <h2 data-i18n="install.title">Use it before publishing pressure.</h2>
+          <h2 data-i18n="install.title">Validate locally before standalone claims.</h2>
           <p data-i18n="install.body">
-            The current release path is npm-deferred: clone, pack, install-smoke, and run audits locally while the package surface stays publish-ready.
+            The current release path is npm-deferred: clone, pack, install-smoke, and run audits locally while the package surface stays testable.
           </p>
         </div>
         <pre><code>git clone https://github.com/starter-series/rulemeter.git
@@ -138,7 +183,7 @@ node dist/cli.js audit --preset all</code></pre>
     </main>
 
     <footer class="site-footer">
-      <span data-i18n="footer.status">Lab status: standalone validation before possible absorption into create-starter.</span>
+      <span data-i18n="footer.status">Lab status: internal-helper evidence is positive; standalone release is deferred.</span>
       <a href="https://github.com/starter-series/rulemeter">GitHub</a>
     </footer>
 
