@@ -39,10 +39,13 @@ export {
   formatAuditTable,
   formatDecisionsMarkdown,
   formatDecisionsTable,
+  formatQueueMarkdown,
+  formatQueueTable,
   formatSourcesMarkdown,
   formatSourcesTable,
 } from "./format.js";
 export { discoverPresetFiles, presetNames, type PresetName } from "./presets.js";
+export { buildReviewQueue, type QueueItem, type QueueItemKind, type QueuePriority, type QueueReport } from "./queue.js";
 export { classifyRisks, highRiskLabels, isHighRisk, riskRules, type RiskLabel } from "./risk.js";
 export {
   analyzeInstructionSources,
@@ -57,6 +60,7 @@ export {
   DECISIONS_SCHEMA_VERSION,
   DISCOVERY_SCHEMA_VERSION,
   ERROR_SCHEMA_VERSION,
+  QUEUE_SCHEMA_VERSION,
   SOURCES_SCHEMA_VERSION,
   type RulemeterWarning,
 } from "./schema.js";

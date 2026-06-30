@@ -10,10 +10,13 @@ import {
   formatAuditTable,
   formatDecisionsMarkdown,
   formatDecisionsTable,
+  formatQueueMarkdown,
+  formatQueueTable,
   formatSourcesMarkdown,
   formatSourcesTable,
 } from "./format.js";
 import { discoverPresetFiles, presetNames } from "./presets.js";
+import { buildReviewQueue, type QueueReport } from "./queue.js";
 import { analyzeInstructionSources } from "./sources.js";
 import { DISCOVERY_SCHEMA_VERSION, ERROR_SCHEMA_VERSION } from "./schema.js";
 
@@ -26,6 +29,7 @@ Usage
   rulemeter audit <file...> [--json] [--format table|markdown|json] [--fail-on duplicate|risk|similar] [--experimental-similar] [--similarity-threshold N] [--config PATH] [--preset NAME] [--list-files] [--min-chars N] [--min-repeats N]
   rulemeter sources [file...] [--json] [--format table|markdown|json] [--preset NAME]
   rulemeter decisions [file...] [--json] [--format table|markdown|json] [--preset NAME] [--ledger PATH] [--accept ID|all] [--note TEXT] [--fail-on pending|stale|unaccepted]
+  rulemeter queue [file...] [--json] [--format table|markdown|json] [--preset NAME] [--ledger PATH] [--config PATH] [--experimental-similar] [--similarity-threshold N] [--min-chars N] [--min-repeats N] [--fail-on review|any]
   rulemeter --version
   rulemeter --help
 
@@ -42,6 +46,7 @@ Examples
   rulemeter sources --preset all --format markdown
   rulemeter decisions
   rulemeter decisions --accept all
+  rulemeter queue --preset all --format markdown
 `;
 }
 
@@ -87,11 +92,26 @@ Examples
 `;
 }
 
+function queueHelp(): string {
+  return `rulemeter queue — combine current review signals without scoring or rewriting files.
+
+Usage
+  rulemeter queue [file...] [--json] [--format table|markdown|json] [--preset NAME] [--ledger PATH] [--config PATH] [--experimental-similar] [--similarity-threshold N] [--min-chars N] [--min-repeats N] [--fail-on review|any]
+
+Examples
+  rulemeter queue
+  rulemeter queue --format markdown
+  rulemeter queue --fail-on review
+  rulemeter queue --experimental-similar --format markdown
+`;
+}
+
 class CliError extends RulemeterError {}
 
 type AuditFormat = "table" | "markdown" | "json";
 type FailOn = "duplicate" | "risk" | "similar";
 type DecisionFailOn = "pending" | "stale" | "unaccepted";
+type QueueFailOn = "review" | "any";
 
 function takeValue(args: string[], flag: string, fallback: string): string {
   const index = args.indexOf(flag);
@@ -154,6 +174,12 @@ function parseDecisionFailOn(value: string): DecisionFailOn | null {
   throw new CliError("INVALID_OPTION", "--fail-on must be one of: pending, stale, unaccepted");
 }
 
+function parseQueueFailOn(value: string): QueueFailOn | null {
+  if (!value) return null;
+  if (value === "review" || value === "any") return value;
+  throw new CliError("INVALID_OPTION", "--fail-on must be one of: review, any");
+}
+
 function assertPreset(preset: string): void {
   if (preset && !(presetNames as string[]).includes(preset)) {
     throw new CliError("INVALID_OPTION", `--preset must be one of: ${presetNames.join(", ")}`);
@@ -201,6 +227,12 @@ function decisionFailOnMatched(report: ReturnType<typeof decisionReportForSource
   if (failOn === "pending") return report.counts.pending > 0;
   if (failOn === "stale") return report.counts.stale > 0;
   return report.counts.pending + report.counts.stale > 0;
+}
+
+function queueFailOnMatched(report: QueueReport, failOn: QueueFailOn | null): boolean {
+  if (!failOn) return false;
+  if (failOn === "review") return report.counts.review > 0;
+  return report.counts.total > 0;
 }
 
 async function run(argv: string[]): Promise<number> {
@@ -333,6 +365,52 @@ async function run(argv: string[]): Promise<number> {
       console.log(formatDecisionsTable(report));
     }
     const failed = decisionFailOnMatched(report, failOn);
+    if (failed) console.error(`rulemeter: --fail-on ${failOn} matched`);
+    return failed ? 1 : 0;
+  }
+  if (command === "queue") {
+    if (args[0] === "--help" || args[0] === "-h") {
+      console.log(queueHelp());
+      return 0;
+    }
+    const configPath = takeValue(args, "--config", "");
+    const loadedConfig = await loadRulemeterConfigWithMeta(configPath || undefined);
+    const config: RulemeterConfig = loadedConfig.config;
+    const json = takeBool(args, "--json");
+    const format = parseAuditFormat(takeValue(args, "--format", ""), json);
+    const ledgerPath = takeValue(args, "--ledger", DEFAULT_DECISION_LEDGER_PATH);
+    const failOn = parseQueueFailOn(takeValue(args, "--fail-on", ""));
+    const includeSimilar = takeBool(args, "--experimental-similar");
+    const similarityThreshold = thresholdNumber(takeValue(args, "--similarity-threshold", "0.65"), "--similarity-threshold");
+    const minChars = positiveInteger(takeValue(args, "--min-chars", String(config.minChars ?? 40)), "--min-chars");
+    const minRepeats = positiveInteger(takeValue(args, "--min-repeats", String(config.minRepeats ?? 2)), "--min-repeats");
+    const preset = takeValue(args, "--preset", args.length === 0 ? "all" : "");
+    assertPreset(preset);
+    assertNoUnknownFlags(args);
+    const discoveredFiles = preset ? await discoverPresetFiles(preset) : [];
+    const files = unique([...args, ...discoveredFiles]);
+    assertFilesFound(files, preset, "queue");
+    assertFiles(files);
+    assertLedgerPathSafe(ledgerPath, files);
+
+    const auditReport = await auditRules(files, { minChars, minRepeats, includeSimilar, similarityThreshold });
+    auditReport.configPath = loadedConfig.path;
+    auditReport.preset = preset || null;
+    auditReport.discoveredFiles = discoveredFiles;
+    const sourceReport = await analyzeInstructionSources(files);
+    sourceReport.preset = preset || null;
+    sourceReport.discoveredFiles = discoveredFiles;
+    const decisionReport = decisionReportForSources(sourceReport, await loadDecisionLedger(ledgerPath), ledgerPath);
+    const report = buildReviewQueue(auditReport, decisionReport);
+
+    if (format === "json") {
+      console.log(JSON.stringify(report, null, 2));
+    } else if (format === "markdown") {
+      console.log(formatQueueMarkdown(report));
+    } else {
+      console.log(formatQueueTable(report));
+    }
+    const failed = queueFailOnMatched(report, failOn);
     if (failed) console.error(`rulemeter: --fail-on ${failOn} matched`);
     return failed ? 1 : 0;
   }

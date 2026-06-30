@@ -231,6 +231,35 @@ test("CLI decisions writes owner ledger and fails on unaccepted source warnings"
   assert.match(markdown.stdout, /No pending or stale decision items/);
 });
 
+test("CLI queue emits review items and keeps keyword hints out of fail-on review", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "rulemeter-queue-cli-test-"));
+  await writeFile(join(dir, "AGENTS.md"), "- Actually run tests before claiming success.\n", "utf8");
+
+  const review = await execFileAsync(process.execPath, [cliPath, "queue", "--json", "--fail-on", "review", "--min-chars", "5"], { cwd: dir });
+  const reviewPayload = JSON.parse(review.stdout);
+  assert.equal(reviewPayload.schemaVersion, "rulemeter.queue.v1");
+  assert.equal(reviewPayload.counts.review, 0);
+  assert.equal(reviewPayload.counts.hint, 1);
+  assert.equal(review.stderr, "");
+
+  await assert.rejects(
+    execFileAsync(process.execPath, [cliPath, "queue", "--json", "--fail-on", "any"], { cwd: dir }),
+    (error) => {
+      const payload = JSON.parse(error.stdout);
+      assert.equal(error.code, 1);
+      assert.equal(payload.counts.total, 1);
+      assert.equal(payload.items[0].kind, "risk_summary");
+      assert.equal(payload.items[0].priority, "hint");
+      assert.match(error.stderr, /--fail-on any matched/);
+      return true;
+    },
+  );
+
+  const markdown = await execFileAsync(process.execPath, [cliPath, "queue", "--format", "markdown"], { cwd: dir });
+  assert.match(markdown.stdout, /^# RuleMeter Review Queue/m);
+  assert.match(markdown.stdout, /keyword hint items: 1/);
+});
+
 test("CLI audit reads config file", async () => {
   const path = await fixture();
   const dir = await mkdtemp(join(tmpdir(), "rulemeter-config-test-"));
