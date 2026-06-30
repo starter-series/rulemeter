@@ -7,6 +7,12 @@ RuleMeter is still a lab tool. This checklist keeps npm publication deferred unt
 Run these from a clean checkout:
 
 ```bash
+npm run verify:local
+```
+
+`verify:local` runs:
+
+```bash
 npm test
 npm run dogfood
 npm run validate:corpus

@@ -50,6 +50,9 @@ test("GitHub Pages states the current validation verdict without standalone over
   assert.match(translations.en["evidence.verdict.value"], /standalone deferred/u);
   assert.match(translations.en["footer.status"], /standalone release is deferred/u);
   assert.match(translations.en["install.checklist"], /release checklist/u);
+  assert.match(translations.en["install.body"], /verify locally/u);
+  assert.match(translations.en["evidence.private.value"], /not public proof/u);
+  assert.doesNotMatch(html, /67 docs \/ 53 roots/u);
   assert.doesNotMatch(translations.en["install.body"], /publish-ready/u);
 });
 

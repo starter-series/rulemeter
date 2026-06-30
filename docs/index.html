@@ -63,13 +63,11 @@
           <pre><code>rulemeter audit --preset all --format markdown
 
 files: 15
-risk findings: 6
-risk summaries: 3
-duplicate candidates: 0
-surface overlaps: 3
-similar candidates: 7
+same-file duplicate actions: 1
+cross-file overlap reviews: 3
+keyword review groups: 3
 
-verdict: internal-helper ready
+next: paste report into PR review
 standalone: deferred</code></pre>
         </div>
       </section>
@@ -140,28 +138,28 @@ standalone: deferred</code></pre>
           </div>
           <dl class="metrics">
             <div>
-              <dt data-i18n="evidence.docs.label">Corpus</dt>
-              <dd data-i18n="evidence.docs.value">67 docs / 53 roots / 13 holdout</dd>
+              <dt data-i18n="evidence.docs.label">Public corpus</dt>
+              <dd data-i18n="evidence.docs.value">3 fixture docs, smoke only</dd>
             </div>
             <div>
-              <dt data-i18n="evidence.surface.label">Surface overlap usefulness</dt>
-              <dd>0.957 / 0.889 holdout</dd>
+              <dt data-i18n="evidence.private.label">Private validation</dt>
+              <dd data-i18n="evidence.private.value">owner-held snapshot; not public proof</dd>
             </div>
             <div>
-              <dt data-i18n="evidence.risk.label">Risk-summary usefulness</dt>
-              <dd>0.857 / 0.800 holdout</dd>
+              <dt data-i18n="evidence.release.label">Standalone release</dt>
+              <dd data-i18n="evidence.release.value">deferred until strict corpus passes</dd>
             </div>
             <div>
-              <dt data-i18n="evidence.duplicate.label">Same-file duplicate signal</dt>
-              <dd data-i18n="evidence.duplicate.value">0 findings</dd>
+              <dt data-i18n="evidence.risk.label">Risk model</dt>
+              <dd data-i18n="evidence.risk.value">keyword-based and non-exhaustive</dd>
             </div>
             <div>
-              <dt data-i18n="evidence.load.label">Review load</dt>
-              <dd>8.4 items / 1k lines</dd>
+              <dt data-i18n="evidence.ci.label">CI corpus check</dt>
+              <dd data-i18n="evidence.ci.value">non-strict smoke against fixture corpus</dd>
             </div>
             <div>
-              <dt data-i18n="evidence.riskload.label">Risk load</dt>
-              <dd>18.9 findings / 1k lines</dd>
+              <dt data-i18n="evidence.next.label">Decision path</dt>
+              <dd data-i18n="evidence.next.value">release checklist before publish or absorption</dd>
             </div>
           </dl>
         </div>
@@ -171,17 +169,17 @@ standalone: deferred</code></pre>
         <div>
           <h2 data-i18n="install.title">Validate locally before standalone claims.</h2>
           <p data-i18n="install.body">
-            The current release path is npm-deferred: clone, pack, install-smoke, and run audits locally while the package surface stays testable.
+            The current release path is npm-deferred: clone, verify locally, and run audits while the package surface stays testable.
           </p>
           <p class="inline-link">
             <a href="./release-checklist.md" data-i18n="install.checklist">Read the release checklist</a>
           </p>
         </div>
         <pre><code>git clone https://github.com/starter-series/rulemeter.git
-cd rulemeter
-npm install
-npm run smoke:install
-node dist/cli.js audit --preset all</code></pre>
+	cd rulemeter
+	npm install
+	npm run verify:local
+	node dist/cli.js audit --preset all --format markdown</code></pre>
       </section>
     </main>
 

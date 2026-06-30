@@ -22,14 +22,15 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "node scripts/clean-dist.mjs && tsc && node scripts/mark-bin-executable.mjs",
-    "test": "npm run build && node --test test/*.test.js",
+    "build": "node scripts/build.mjs",
+    "test": "npm run build && node --test --test-concurrency=1 test/*.test.js",
     "dogfood": "npm run build && node dist/cli.js audit fixtures/AGENTS.md fixtures/CLAUDE.md fixtures/task.txt",
     "validate:corpus": "npm run build && node scripts/validate-corpus.mjs --manifest validation/corpus.example.json --format markdown",
     "pack:check": "npm run build && node scripts/check-pack.mjs",
     "smoke:install": "npm run build && node scripts/smoke-install.mjs",
+    "verify:local": "npm test && npm run dogfood && npm run validate:corpus && npm run pack:check && npm run smoke:install && npm audit --audit-level=high",
     "prepare": "npm run build",
-    "prepublishOnly": "npm test && npm run dogfood && npm run pack:check && npm run smoke:install && npm audit --audit-level=high"
+    "prepublishOnly": "npm run verify:local"
   },
   "keywords": [
     "agents",

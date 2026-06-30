@@ -17,19 +17,23 @@ It does not rewrite files, compress prompts, score an agent harness, auto-sync i
 
 ## Install
 
-From a clone:
+From a clone. This is the current supported path while npm publication is deferred:
 
 ```bash
 npm install
 npm run build
-node dist/cli.js audit AGENTS.md CLAUDE.md task.txt
+node dist/cli.js audit --preset all --list-files
+node dist/cli.js audit --preset all --format markdown
 ```
 
-After package installation, use the `rulemeter` binary:
+For a local binary during development:
 
 ```bash
+npm link
 rulemeter audit AGENTS.md CLAUDE.md task.txt
 ```
+
+After a future package publication, the same `rulemeter` binary path should be the normal install flow. Do not treat `npx rulemeter` as live until the package is published.
 
 ## Usage
 
@@ -64,7 +68,7 @@ Machine-readable output includes a stable `schemaVersion`:
 
 Important `audit --json` review keys:
 
-- `candidates`: same-file exact duplicate candidates. The table heading calls these "Duplicate candidates"; the JSON key is `candidates`.
+- `candidates`: same-file exact duplicate candidates. Human reports call these "same-file duplicate actions"; the JSON key remains `candidates`.
 - `surfaceOverlaps`: exact cross-file overlaps grouped by shared file set.
 - `riskFindings`: line-level keyword risk matches.
 - `riskSummaries`: risk matches grouped by label for human review.
@@ -153,6 +157,8 @@ When a config file is loaded, table output prints `config: <path>` and JSON outp
 | `review_duplicate` | Cross-file exact overlap appears in `surfaceOverlaps`. Review for drift, parity, or consolidation; do not treat it as a safe deletion instruction. |
 | `keep_explicit` | The text matched a risk label, so duplicate removal should be reviewed carefully. |
 
+Human-readable table and Markdown reports translate these raw JSON recommendation values into action labels such as "Probably removable", "Keep explicit", and "Review for parity or drift".
+
 ## Risk Labels
 
 - `identity`
@@ -189,6 +195,12 @@ These are important safety rules, but the current keyword lint may not flag them
 ## Verification
 
 ```bash
+npm run verify:local
+```
+
+`verify:local` runs the full local gate:
+
+```bash
 npm test
 npm run dogfood
 npm run validate:corpus
@@ -197,7 +209,7 @@ npm run smoke:install
 npm audit --audit-level=high
 ```
 
-`smoke:install` packs the current checkout into a local tarball, installs that tarball in a temporary consumer project with package lifecycle scripts disabled, and verifies the installed `rulemeter` binary. This keeps release validation useful even when npm publication is deferred.
+`smoke:install` packs the current checkout into a local tarball, then installs that tarball in a temporary consumer project with consumer package lifecycle scripts disabled, and verifies the installed `rulemeter` binary. The source checkout may still run its normal `prepare`/build path while packing. This keeps release validation useful even when npm publication is deferred.
 
 `validate:corpus` runs a non-strict smoke of the corpus validation harness against `validation/corpus.example.json`. CI runs it to catch script rot, not to claim product usefulness. For real validation, generate or maintain a private manifest of owned instruction files with `scripts/collect-corpus.mjs`, pass it to `scripts/validate-corpus.mjs`, use `--label-template` to create a private review file for current fingerprints, and feed reviewed labels back with `--labels`. See `docs/validation.md`.
 
