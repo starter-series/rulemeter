@@ -52,10 +52,23 @@ test("CLI audit emits Markdown report", async () => {
     cwd: process.cwd(),
   });
   assert.match(stdout, /^# RuleMeter Report/m);
-  assert.match(stdout, /- duplicate candidates: 1/);
-  assert.match(stdout, /- risk findings: 0/);
-  assert.match(stdout, /\| ID \| Recommendation \| Risk \|/);
-  assert.match(stdout, /\| `DUP_01` \| `remove_duplicate` \|/);
+  assert.match(stdout, /- same-file duplicate actions: 1/);
+  assert.match(stdout, /- keyword review findings: 0/);
+  assert.match(stdout, /\| ID \| Action \| Risk \|/);
+  assert.match(stdout, /\| `DUP_01` \| Probably removable \|/);
+  assert.doesNotMatch(stdout, /remove_duplicate/);
+  assert.doesNotMatch(stdout, /cache_hint|Cache hint/);
+});
+
+test("CLI table output uses reviewer actions instead of raw internals", async () => {
+  const path = await fixture();
+  const { stdout } = await execFileAsync(process.execPath, ["dist/cli.js", "audit", path, "--min-chars", "5"], {
+    cwd: process.cwd(),
+  });
+  assert.match(stdout, /Same-file duplicate actions:/);
+  assert.match(stdout, /Probably removable/);
+  assert.doesNotMatch(stdout, /remove_duplicate/);
+  assert.doesNotMatch(stdout, /cache_hint/);
 });
 
 test("CLI fail-on duplicate exits non-zero after printing report", async () => {
@@ -134,7 +147,7 @@ test("CLI experimental similar emits Markdown and fail-on similar", async () => 
     ["dist/cli.js", "audit", path, "--experimental-similar", "--format", "markdown", "--min-chars", "5"],
     { cwd: process.cwd() },
   );
-  assert.match(stdout, /Similar Rule Candidates/);
+  assert.match(stdout, /Lexical Similarity Reviews/);
   assert.match(stdout, /`SIM_01`/);
 
   await assert.rejects(

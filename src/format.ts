@@ -1,7 +1,7 @@
 import type { AuditReport, RiskSummary, RuleCandidate, SimilarRuleCandidate, SurfaceOverlap } from "./audit.js";
 
 function riskText(candidate: RuleCandidate): string {
-  return candidate.risks.length > 0 ? candidate.risks.join(",") : "low";
+  return candidate.risks.length > 0 ? candidate.risks.map(labelText).join(", ") : "none";
 }
 
 function locationsText(candidate: RuleCandidate): string {
@@ -35,15 +35,41 @@ function overlapExamplesText(overlap: SurfaceOverlap): string {
 }
 
 function overlapRiskText(overlap: SurfaceOverlap): string {
-  return overlap.risks.length > 0 ? overlap.risks.join(",") : "low";
+  return overlap.risks.length > 0 ? overlap.risks.map(labelText).join(", ") : "none";
 }
 
 function previewText(value: string): string {
-  return value.length > 100 ? `${value.slice(0, 97)}...` : value;
+  return value.length > 88 ? `${value.slice(0, 85)}...` : value;
 }
 
 function escapeMarkdown(value: string): string {
   return value.replace(/\|/gu, "\\|").replace(/\n/gu, " ");
+}
+
+function labelText(value: string): string {
+  return value.replaceAll("_", " ");
+}
+
+function duplicateActionText(candidate: RuleCandidate): string {
+  return candidate.recommendation === "remove_duplicate" ? "Probably removable" : "Keep explicit";
+}
+
+function overlapActionText(overlap: SurfaceOverlap): string {
+  return overlap.recommendation === "keep_explicit" ? "Keep explicit in each surface" : "Review for parity or drift";
+}
+
+function similarActionText(candidate: SimilarRuleCandidate): string {
+  return candidate.recommendation === "keep_explicit" ? "Keep explicit" : "Review lexical overlap";
+}
+
+function duplicateActionRank(candidate: RuleCandidate): number {
+  return candidate.recommendation === "remove_duplicate" ? 0 : 1;
+}
+
+function candidateDisplayOrder(candidates: RuleCandidate[]): RuleCandidate[] {
+  return [...candidates].sort(
+    (left, right) => duplicateActionRank(left) - duplicateActionRank(right) || left.id.localeCompare(right.id),
+  );
 }
 
 export function formatAuditTable(report: AuditReport): string {
@@ -57,19 +83,17 @@ export function formatAuditTable(report: AuditReport): string {
     lines.push(`warning: ${warning.code} - ${warning.message}`);
   }
   if (report.candidates.length === 0) {
-    lines.push("No same-file duplicate candidates met the thresholds.");
+    lines.push("No same-file duplicate actions met the thresholds.");
   } else {
-    lines.push("Duplicate candidates:");
-    const headers = ["id", "repeats", "chars", "risk", "recommendation", "cache_hint", "locations", "text"];
-    const rows = report.candidates.map((candidate) => [
+    lines.push("Same-file duplicate actions:");
+    const headers = ["id", "action", "repeats", "risk", "locations", "text"];
+    const rows = candidateDisplayOrder(report.candidates).map((candidate) => [
       candidate.id,
+      duplicateActionText(candidate),
       String(candidate.repeats),
-      String(candidate.chars),
       riskText(candidate),
-      candidate.recommendation,
-      candidate.cacheHint,
       locationsText(candidate),
-      candidate.text,
+      previewText(candidate.text),
     ]);
     const widths = headers.map((header, index) => Math.max(header.length, ...rows.map((row) => row[index]?.length ?? 0)));
 
@@ -82,15 +106,15 @@ export function formatAuditTable(report: AuditReport): string {
 
   if (report.surfaceOverlaps.length > 0) {
     lines.push("");
-    lines.push("Surface overlaps:");
-    const headers = ["id", "paths", "duplicate_texts", "occurrences", "risk", "recommendation", "examples"];
+    lines.push("Cross-file overlap reviews:");
+    const headers = ["id", "action", "paths", "shared rules", "occurrences", "risk", "examples"];
     const rows = report.surfaceOverlaps.map((overlap) => [
       overlap.id,
+      overlapActionText(overlap),
       pathsText(overlap.paths),
       String(overlap.duplicateTexts),
       String(overlap.occurrences),
       overlapRiskText(overlap),
-      overlap.recommendation,
       overlapExamplesText(overlap),
     ]);
     const widths = headers.map((header, index) => Math.max(header.length, ...rows.map((row) => row[index]?.length ?? 0)));
@@ -103,15 +127,14 @@ export function formatAuditTable(report: AuditReport): string {
 
   if (report.riskFindings.length > 0) {
     lines.push("");
-    lines.push("Risk summaries:");
-    const headers = ["id", "risk", "findings", "occurrences", "paths", "cache_hint", "examples"];
+    lines.push("Keyword review hits:");
+    const headers = ["id", "label", "findings", "occurrences", "paths", "examples"];
     const rows = report.riskSummaries.map((summary) => [
       summary.id,
-      summary.risk,
+      labelText(summary.risk),
       String(summary.findings),
       String(summary.occurrences),
       pathsText(summary.paths),
-      summary.cacheHint,
       riskSummaryExamplesText(summary),
     ]);
     const widths = headers.map((header, index) => Math.max(header.length, ...rows.map((row) => row[index]?.length ?? 0)));
@@ -127,15 +150,15 @@ export function formatAuditTable(report: AuditReport): string {
   }
 
   lines.push("");
-  lines.push("Similar rule candidates:");
-  const headers = ["id", "similarity", "risk", "recommendation", "locations", "texts"];
+  lines.push("Lexical similarity reviews:");
+  const headers = ["id", "action", "similarity", "risk", "locations", "texts"];
   const rows = report.similarCandidates.map((candidate) => [
     candidate.id,
+    similarActionText(candidate),
     String(candidate.similarity),
-    candidate.risks.length > 0 ? candidate.risks.join(",") : "low",
-    candidate.recommendation,
+    candidate.risks.length > 0 ? candidate.risks.map(labelText).join(", ") : "none",
     similarLocationsText(candidate),
-    candidate.texts.join(" | "),
+    candidate.texts.map(previewText).join(" | "),
   ]);
   const widths = headers.map((header, index) => Math.max(header.length, ...rows.map((row) => row[index]?.length ?? 0)));
   lines.push(headers.map((header, index) => header.padEnd(widths[index] ?? header.length)).join("  "));
@@ -151,11 +174,11 @@ export function formatAuditMarkdown(report: AuditReport): string {
   if (report.configPath) lines.push(`- config: \`${report.configPath}\``);
   if (report.preset) lines.push(`- preset: \`${report.preset}\``);
   lines.push(`- files: ${report.files.length}`);
-  lines.push(`- duplicate candidates: ${report.candidates.length}`);
-  lines.push(`- surface overlaps: ${report.surfaceOverlaps.length}`);
-  lines.push(`- risk findings: ${report.riskFindings.length}`);
-  lines.push(`- risk summaries: ${report.riskSummaries.length}`);
-  lines.push(`- similar candidates: ${report.similarCandidates.length}`);
+  lines.push(`- same-file duplicate actions: ${report.candidates.length}`);
+  lines.push(`- cross-file overlap reviews: ${report.surfaceOverlaps.length}`);
+  lines.push(`- keyword review findings: ${report.riskFindings.length}`);
+  lines.push(`- keyword review groups: ${report.riskSummaries.length}`);
+  lines.push(`- lexical similarity reviews: ${report.similarCandidates.length}`);
   if (report.discoveredFiles && report.discoveredFiles.length > 0) {
     lines.push(`- discovered files: ${report.discoveredFiles.map((file) => `\`${file}\``).join(", ")}`);
   }
@@ -165,22 +188,21 @@ export function formatAuditMarkdown(report: AuditReport): string {
   lines.push("");
 
   if (report.candidates.length === 0) {
-    lines.push("No same-file duplicate candidates met the thresholds.");
+    lines.push("No same-file duplicate actions met the thresholds.");
   } else {
-    lines.push("## Duplicate Candidates");
+    lines.push("## Same-file Duplicate Actions");
     lines.push("");
-    lines.push("| ID | Recommendation | Risk | Repeats | Chars | Locations | Text |");
-    lines.push("|---|---|---|---:|---:|---|---|");
-    for (const candidate of report.candidates) {
+    lines.push("| ID | Action | Risk | Repeats | Locations | Text |");
+    lines.push("|---|---|---|---:|---|---|");
+    for (const candidate of candidateDisplayOrder(report.candidates)) {
       lines.push(
         `| ${[
           `\`${escapeMarkdown(candidate.id)}\``,
-          `\`${escapeMarkdown(candidate.recommendation)}\``,
+          escapeMarkdown(duplicateActionText(candidate)),
           escapeMarkdown(riskText(candidate)),
           String(candidate.repeats),
-          String(candidate.chars),
           escapeMarkdown(locationsText(candidate)),
-          escapeMarkdown(candidate.text),
+          escapeMarkdown(previewText(candidate.text)),
         ].join(" | ")} |`,
       );
     }
@@ -188,15 +210,15 @@ export function formatAuditMarkdown(report: AuditReport): string {
 
   if (report.surfaceOverlaps.length > 0) {
     lines.push("");
-    lines.push("## Surface Overlaps");
+    lines.push("## Cross-file Overlap Reviews");
     lines.push("");
-    lines.push("| ID | Recommendation | Risk | Paths | Duplicate texts | Occurrences | Examples |");
+    lines.push("| ID | Action | Risk | Paths | Shared rules | Occurrences | Examples |");
     lines.push("|---|---|---|---|---:|---:|---|");
     for (const overlap of report.surfaceOverlaps) {
       lines.push(
         `| ${[
           `\`${escapeMarkdown(overlap.id)}\``,
-          `\`${escapeMarkdown(overlap.recommendation)}\``,
+          escapeMarkdown(overlapActionText(overlap)),
           escapeMarkdown(overlapRiskText(overlap)),
           escapeMarkdown(pathsText(overlap.paths)),
           String(overlap.duplicateTexts),
@@ -209,19 +231,18 @@ export function formatAuditMarkdown(report: AuditReport): string {
 
   if (report.riskFindings.length > 0) {
     lines.push("");
-    lines.push("## Risk Summaries");
+    lines.push("## Keyword Review Hits");
     lines.push("");
-    lines.push("| ID | Risk | Findings | Occurrences | Paths | Cache hint | Examples |");
-    lines.push("|---|---|---:|---:|---|---|---|");
+    lines.push("| ID | Label | Findings | Occurrences | Paths | Examples |");
+    lines.push("|---|---|---:|---:|---|---|");
     for (const summary of report.riskSummaries) {
       lines.push(
         `| ${[
           `\`${escapeMarkdown(summary.id)}\``,
-          escapeMarkdown(summary.risk),
+          escapeMarkdown(labelText(summary.risk)),
           String(summary.findings),
           String(summary.occurrences),
           escapeMarkdown(pathsText(summary.paths)),
-          `\`${escapeMarkdown(summary.cacheHint)}\``,
           escapeMarkdown(riskSummaryExamplesText(summary)),
         ].join(" | ")} |`,
       );
@@ -230,19 +251,19 @@ export function formatAuditMarkdown(report: AuditReport): string {
 
   if (report.similarCandidates.length > 0) {
     lines.push("");
-    lines.push("## Similar Rule Candidates");
+    lines.push("## Lexical Similarity Reviews");
     lines.push("");
-    lines.push("| ID | Recommendation | Similarity | Risk | Locations | Texts |");
+    lines.push("| ID | Action | Similarity | Risk | Locations | Texts |");
     lines.push("|---|---|---:|---|---|---|");
     for (const candidate of report.similarCandidates) {
       lines.push(
         `| ${[
           `\`${escapeMarkdown(candidate.id)}\``,
-          `\`${escapeMarkdown(candidate.recommendation)}\``,
+          escapeMarkdown(similarActionText(candidate)),
           String(candidate.similarity),
-          escapeMarkdown(candidate.risks.length > 0 ? candidate.risks.join(",") : "low"),
+          escapeMarkdown(candidate.risks.length > 0 ? candidate.risks.map(labelText).join(", ") : "none"),
           escapeMarkdown(similarLocationsText(candidate)),
-          candidate.texts.map(escapeMarkdown).join("<br>"),
+          candidate.texts.map((text) => escapeMarkdown(previewText(text))).join("<br>"),
         ].join(" | ")} |`,
       );
     }
