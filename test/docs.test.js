@@ -46,8 +46,10 @@ test("GitHub Pages states the current validation verdict without standalone over
   const translations = await translationsFromScript();
 
   assert.match(html, /standalone: deferred/u);
+  assert.match(html, /release-checklist\.md/u);
   assert.match(translations.en["evidence.verdict.value"], /standalone deferred/u);
   assert.match(translations.en["footer.status"], /standalone release is deferred/u);
+  assert.match(translations.en["install.checklist"], /release checklist/u);
   assert.doesNotMatch(translations.en["install.body"], /publish-ready/u);
 });
 

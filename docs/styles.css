@@ -145,6 +145,17 @@ main {
   line-height: 1.65;
 }
 
+.inline-link {
+  margin-top: 14px;
+}
+
+.inline-link a {
+  color: var(--accent);
+  font-weight: 720;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
 .hero-copy p {
   max-width: 650px;
   margin: 26px 0 0;

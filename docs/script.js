@@ -44,6 +44,7 @@ const translations = {
     "install.title": "Validate locally before standalone claims.",
     "install.body":
       "The current release path is npm-deferred: clone, pack, install-smoke, and run audits locally while the package surface stays testable.",
+    "install.checklist": "Read the release checklist",
     "footer.status": "Lab status: internal-helper evidence is positive; standalone release is deferred.",
   },
   ko: {
@@ -91,6 +92,7 @@ const translations = {
     "install.title": "Standalone 주장 전에 로컬에서 검증하세요.",
     "install.body":
       "현재 릴리스 경로는 npm deferred입니다. clone, pack, install-smoke, local audit로 패키지 표면을 계속 검증 가능한 상태로 유지합니다.",
+    "install.checklist": "릴리스 체크리스트 보기",
     "footer.status": "Lab 상태: internal-helper 근거는 긍정적이고, standalone release는 보류입니다.",
   },
   ja: {
@@ -138,6 +140,7 @@ const translations = {
     "install.title": "Standalone 主張の前にローカル検証します。",
     "install.body":
       "現在のリリース経路は npm deferred です。clone、pack、install-smoke、local audit で package surface を検証可能な状態に保ちます。",
+    "install.checklist": "リリース checklist を読む",
     "footer.status": "Lab status: internal-helper evidence is positive; standalone release is deferred.",
   },
 };
