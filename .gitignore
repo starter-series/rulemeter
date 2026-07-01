@@ -3,5 +3,6 @@ dist/
 coverage/
 .playwright-cli/
 output/
+.rulemeter/state.json
 *.tgz
 .DS_Store
