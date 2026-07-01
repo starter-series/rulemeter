@@ -2,7 +2,7 @@
 
 > Status: Lab — standalone validation before possible `create-starter audit-agent-rules` absorption.
 
-`RuleMeter` is a report-only review aid for same-file duplicate instruction text, cross-file verbatim overlap, source-of-truth topology, optional owner-ratified topology decisions, a scoreless review queue, and optional lexical near-duplicate review prompts in files such as `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and Copilot instruction files.
+`RuleMeter` is a local instruction governance engine for agent instruction files. It tracks source-of-truth topology, repeated rules, owner-ratified exceptions, and new review deltas across files such as `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, and Copilot instruction files.
 
 Website: https://starter-series.github.io/rulemeter/
 
@@ -13,10 +13,11 @@ It helps maintainers review:
 - source-of-truth topology warnings such as local overrides or byte-identical mirrors
 - owner-ratified topology decisions stored in a local ledger
 - a single review queue that combines current open review items without scoring them
+- a stateful run report that separates new, changed, known, and resolved review work
 - keyword-based review prompts that may deserve human attention
 - optional lexical near-duplicate review prompts
 
-It does not rewrite instruction files, compress prompts, score an agent harness, auto-sync instruction files, guarantee safety coverage, prove that an instruction set is secure, or replace a human review. The only built-in write path is the optional `.rulemeter/decisions.json` ledger created by `rulemeter decisions --accept ...`. Treat the report as a review aid, not an AI safety/security linter, runtime guardrail, harness scorecard, or enforcement engine.
+It does not rewrite instruction files, compress prompts, score an agent harness, auto-sync instruction files, guarantee safety coverage, prove that an instruction set is secure, or replace a human review. The only built-in write paths are `.rulemeter/decisions.json` when `rulemeter decisions --accept ...` is used and `.rulemeter/state.json` when `rulemeter run --update-state` is used. Treat the report as a review aid, not an AI safety/security linter, runtime guardrail, harness scorecard, or enforcement engine.
 
 ## Install
 
@@ -56,6 +57,9 @@ rulemeter decisions --fail-on unaccepted
 rulemeter queue
 rulemeter queue --format markdown
 rulemeter queue --fail-on review
+rulemeter run
+rulemeter run --update-state
+rulemeter run --fail-on new-review
 rulemeter audit AGENTS.md --json
 rulemeter audit AGENTS.md --config rulemeter.config.json
 ```
@@ -75,6 +79,8 @@ Machine-readable output includes a stable `schemaVersion`:
 - `rulemeter.sources.v1` for `sources --json`
 - `rulemeter.decisions.v1` for `decisions --json`
 - `rulemeter.queue.v1` for `queue --json`
+- `rulemeter.run.v1` for `run --json`
+- `rulemeter.state.v1` for `.rulemeter/state.json`
 - `rulemeter.discovery.v1` for `audit --list-files --json`
 - `rulemeter.error.v1` for JSON errors
 
@@ -108,6 +114,8 @@ Human-readable `sources` reports classify files as:
 
 `rulemeter.queue.v1` combines current open review items from `audit` and `decisions` into one scoreless queue. Source decision items, same-file duplicate actions, cross-file surface overlaps, and optional lexical similar candidates are `review` priority. Keyword risk summaries are `hint` priority because they are non-exhaustive.
 
+`rulemeter.run.v1` compares the current queue against `.rulemeter/state.json` and classifies current items as `new`, `changed`, or `known`. Items that existed in the previous state but no longer exist in the current queue are reported as `resolved`. `rulemeter.state.v1` stores queue item metadata and fingerprints only; it does not store instruction-file contents.
+
 Errors use `rulemeter.error.v1` and stable `error.code` values for automation. Common user-facing codes include `NO_FILES_FOUND`, `FILE_NOT_FOUND`, `NOT_A_FILE`, `CONFIG_NOT_FOUND`, `CONFIG_INVALID_JSON`, `CONFIG_INVALID`, `INVALID_OPTION`, `UNKNOWN_FLAG`, and `UNKNOWN_COMMAND`.
 
 ## Reports And CI Tripwires
@@ -127,6 +135,9 @@ rulemeter audit --preset all --experimental-similar --fail-on similar
 rulemeter decisions --fail-on unaccepted
 rulemeter queue --fail-on review
 rulemeter queue --fail-on any
+rulemeter run --fail-on new-review
+rulemeter run --fail-on delta-review
+rulemeter run --fail-on any-delta
 ```
 
 | Gate | Fails when |
@@ -139,6 +150,10 @@ rulemeter queue --fail-on any
 | `decisions --fail-on unaccepted` | At least one current topology warning is pending or stale. |
 | `queue --fail-on review` | At least one non-hint queue item is open. Keyword hints do not trigger this gate. |
 | `queue --fail-on any` | At least one queue item is open, including keyword hints. |
+| `run --fail-on new-review` | At least one newly seen non-hint queue item exists compared with `.rulemeter/state.json`. |
+| `run --fail-on changed-review` | At least one previously seen non-hint queue item has changed evidence. |
+| `run --fail-on delta-review` | At least one new or changed non-hint queue item exists. |
+| `run --fail-on any-delta` | At least one current item is new or changed, or one previous item resolved. |
 
 Do not treat `--fail-on risk` as a safety certification gate. It is useful for review attention and regression tripwires, but it can miss important safety rules.
 
@@ -227,6 +242,38 @@ The queue is scoreless and read-only. It does not rank files, grade an agent set
 
 Use `queue --fail-on review` when CI should fail only for non-hint review work. Use `queue --fail-on any` only if keyword hints should also fail the run.
 
+## Stateful Run
+
+Use `rulemeter run` when RuleMeter is called repeatedly by a local Codex, Claude, or CI harness and you only want the delta since the previous run.
+
+```bash
+rulemeter run
+rulemeter run --format markdown
+rulemeter run --update-state
+rulemeter run --fail-on new-review
+```
+
+By default, `run` reads `.rulemeter/state.json` if it exists and prints a delta report without writing state. Add `--update-state` after a reviewed run to record the current queue fingerprints. The state file tracks queue item metadata and hashes only; it does not copy instruction-file text.
+
+Run statuses:
+
+| Status | Meaning |
+|---|---|
+| `new` | Current queue item was not present in the previous state. |
+| `changed` | Current queue item matches a previous item key, but its fingerprint changed. |
+| `known` | Current queue item matches the previous fingerprint. |
+| `resolved` | Previous item is absent from the current queue. |
+
+The intended loop is:
+
+```bash
+rulemeter run --preset all --format markdown
+# review the delta
+rulemeter run --preset all --update-state
+```
+
+Use `run --fail-on new-review` or `run --fail-on delta-review` for pre-merge tripwires that should react only to new or changed non-hint review work, instead of failing forever on already-known queue items.
+
 ## Config
 
 `RuleMeter` auto-loads `rulemeter.config.json` from the current directory when present. You can also pass `--config <path>`.
@@ -280,6 +327,7 @@ These are important safety rules, but the current keyword lint may not flag them
 - Cross-file duplicate text is summarized as `surfaceOverlaps` because different agents may need explicit parallel instructions.
 - Source topology checks are filesystem/syntax checks only. They can identify symlinks, `@path.md` imports, byte-identical mirrors, and local overrides, but they do not infer whether two different files are semantically aligned.
 - The review queue is an aggregation view over existing signals. It does not introduce a stronger classifier or product-quality score.
+- The stateful run report only compares deterministic queue fingerprints. It is an operating aid for repeat runs, not a behavioral evaluation of the agent harness.
 - Experimental similar-rule detection uses lexical overlap and is off by default. Treat `similarCandidates` as review prompts, not proof of semantic equivalence.
 - Similar-rule detection can catch near repeats such as reordered shared wording, but it can miss meaning-preserving rewrites that swap most vocabulary. Do not use it as a semantic drift detector.
 - Risk findings are keyword-based and non-exhaustive; they can produce both false positives and false negatives.
@@ -320,4 +368,4 @@ If those targets do not hold, keep RuleMeter private or absorb it into `create-s
 
 ## Scope
 
-This repo exists to validate whether non-scoring duplicate and overlap review is useful as a small standalone tool. If it proves useful repeatedly, the intended absorption path is `create-starter audit-agent-rules`.
+This repo exists to validate whether non-scoring local instruction governance is useful as a small standalone tool and as a repeatable harness primitive. If it proves useful repeatedly, the intended absorption path is `create-starter audit-agent-rules`.

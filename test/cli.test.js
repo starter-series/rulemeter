@@ -260,6 +260,53 @@ test("CLI queue emits review items and keeps keyword hints out of fail-on review
   assert.match(markdown.stdout, /keyword hint items: 1/);
 });
 
+test("CLI run writes local state and reports only review deltas", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "rulemeter-run-cli-test-"));
+  const text = "- Keep implementation local and verify before reporting.";
+  const agentsPath = join(dir, "AGENTS.md");
+  await writeFile(agentsPath, `${text}\n${text}\n`, "utf8");
+
+  await assert.rejects(
+    execFileAsync(process.execPath, [cliPath, "run", "--json", "--min-chars", "5", "--fail-on", "new-review"], { cwd: dir }),
+    (error) => {
+      const payload = JSON.parse(error.stdout);
+      assert.equal(error.code, 1);
+      assert.equal(payload.schemaVersion, "rulemeter.run.v1");
+      assert.equal(payload.counts.newReview, 1);
+      assert.equal(payload.counts.known, 0);
+      assert.match(error.stderr, /--fail-on new-review matched/);
+      return true;
+    },
+  );
+
+  const first = await execFileAsync(process.execPath, [cliPath, "run", "--json", "--min-chars", "5", "--update-state"], { cwd: dir });
+  const firstPayload = JSON.parse(first.stdout);
+  assert.equal(firstPayload.stateUpdated, true);
+  assert.equal(firstPayload.counts.new, 1);
+
+  const state = JSON.parse(await readFile(join(dir, ".rulemeter", "state.json"), "utf8"));
+  assert.equal(state.schemaVersion, "rulemeter.state.v1");
+  assert.equal(state.items.length, 1);
+  assert.equal(state.items[0].preview, null);
+
+  const second = await execFileAsync(process.execPath, [cliPath, "run", "--json", "--min-chars", "5", "--update-state"], { cwd: dir });
+  const secondPayload = JSON.parse(second.stdout);
+  assert.equal(secondPayload.counts.newReview, 0);
+  assert.equal(secondPayload.counts.known, 1);
+  assert.equal(second.stderr, "");
+
+  await writeFile(agentsPath, `${text}\n`, "utf8");
+  const resolved = await execFileAsync(process.execPath, [cliPath, "run", "--json", "--min-chars", "5", "--update-state"], { cwd: dir });
+  const resolvedPayload = JSON.parse(resolved.stdout);
+  assert.equal(resolvedPayload.counts.resolved, 1);
+  assert.equal(resolvedPayload.resolvedItems[0].status, "resolved");
+  assert.equal(resolvedPayload.items.length, 0);
+
+  const markdown = await execFileAsync(process.execPath, [cliPath, "run", "--format", "markdown"], { cwd: dir });
+  assert.match(markdown.stdout, /^# RuleMeter Run/m);
+  assert.match(markdown.stdout, /No new, changed, or resolved review queue items/);
+});
+
 test("CLI audit reads config file", async () => {
   const path = await fixture();
   const dir = await mkdtemp(join(tmpdir(), "rulemeter-config-test-"));

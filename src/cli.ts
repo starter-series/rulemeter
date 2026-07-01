@@ -12,12 +12,23 @@ import {
   formatDecisionsTable,
   formatQueueMarkdown,
   formatQueueTable,
+  formatRunMarkdown,
+  formatRunTable,
   formatSourcesMarkdown,
   formatSourcesTable,
 } from "./format.js";
 import { discoverPresetFiles, presetNames } from "./presets.js";
 import { buildReviewQueue, type QueueReport } from "./queue.js";
 import { analyzeInstructionSources } from "./sources.js";
+import {
+  buildRunReport,
+  DEFAULT_STATE_PATH,
+  loadRulemeterState,
+  runFailOnMatched,
+  writeRulemeterState,
+  type RunFailOn,
+  type RunReport,
+} from "./state.js";
 import { DISCOVERY_SCHEMA_VERSION, ERROR_SCHEMA_VERSION } from "./schema.js";
 
 const VERSION = "0.1.0";
@@ -30,6 +41,7 @@ Usage
   rulemeter sources [file...] [--json] [--format table|markdown|json] [--preset NAME]
   rulemeter decisions [file...] [--json] [--format table|markdown|json] [--preset NAME] [--ledger PATH] [--accept ID|all] [--note TEXT] [--fail-on pending|stale|unaccepted]
   rulemeter queue [file...] [--json] [--format table|markdown|json] [--preset NAME] [--ledger PATH] [--config PATH] [--experimental-similar] [--similarity-threshold N] [--min-chars N] [--min-repeats N] [--fail-on review|any]
+  rulemeter run [file...] [--json] [--format table|markdown|json] [--preset NAME] [--ledger PATH] [--state PATH] [--update-state] [--config PATH] [--experimental-similar] [--similarity-threshold N] [--min-chars N] [--min-repeats N] [--fail-on new-review|changed-review|delta-review|any-delta]
   rulemeter --version
   rulemeter --help
 
@@ -47,6 +59,7 @@ Examples
   rulemeter decisions
   rulemeter decisions --accept all
   rulemeter queue --preset all --format markdown
+  rulemeter run --preset all --update-state
 `;
 }
 
@@ -103,6 +116,20 @@ Examples
   rulemeter queue --format markdown
   rulemeter queue --fail-on review
   rulemeter queue --experimental-similar --format markdown
+`;
+}
+
+function runHelp(): string {
+  return `rulemeter run — compare the current review queue against local state.
+
+Usage
+  rulemeter run [file...] [--json] [--format table|markdown|json] [--preset NAME] [--ledger PATH] [--state PATH] [--update-state] [--config PATH] [--experimental-similar] [--similarity-threshold N] [--min-chars N] [--min-repeats N] [--fail-on new-review|changed-review|delta-review|any-delta]
+
+Examples
+  rulemeter run
+  rulemeter run --format markdown
+  rulemeter run --update-state
+  rulemeter run --fail-on new-review
 `;
 }
 
@@ -180,6 +207,12 @@ function parseQueueFailOn(value: string): QueueFailOn | null {
   throw new CliError("INVALID_OPTION", "--fail-on must be one of: review, any");
 }
 
+function parseRunFailOn(value: string): RunFailOn | null {
+  if (!value) return null;
+  if (value === "new-review" || value === "changed-review" || value === "delta-review" || value === "any-delta") return value;
+  throw new CliError("INVALID_OPTION", "--fail-on must be one of: new-review, changed-review, delta-review, any-delta");
+}
+
 function assertPreset(preset: string): void {
   if (preset && !(presetNames as string[]).includes(preset)) {
     throw new CliError("INVALID_OPTION", `--preset must be one of: ${presetNames.join(", ")}`);
@@ -197,11 +230,15 @@ function assertFiles(paths: string[]): void {
   }
 }
 
-function assertLedgerPathSafe(ledgerPath: string, files: string[]): void {
-  const ledger = resolve(ledgerPath);
-  if (files.some((file) => resolve(file) === ledger)) {
-    throw new CliError("INVALID_OPTION", "--ledger must not point at a scanned instruction file");
+function assertWritePathSafe(flag: string, writePath: string, files: string[]): void {
+  const resolvedWritePath = resolve(writePath);
+  if (files.some((file) => resolve(file) === resolvedWritePath)) {
+    throw new CliError("INVALID_OPTION", `${flag} must not point at a scanned instruction file`);
   }
+}
+
+function assertLedgerPathSafe(ledgerPath: string, files: string[]): void {
+  assertWritePathSafe("--ledger", ledgerPath, files);
 }
 
 function assertFilesFound(paths: string[], preset: string, command = "audit"): void {
@@ -233,6 +270,30 @@ function queueFailOnMatched(report: QueueReport, failOn: QueueFailOn | null): bo
   if (!failOn) return false;
   if (failOn === "review") return report.counts.review > 0;
   return report.counts.total > 0;
+}
+
+async function queueReportForFiles(
+  files: string[],
+  discoveredFiles: string[],
+  preset: string,
+  ledgerPath: string,
+  loadedConfig: Awaited<ReturnType<typeof loadRulemeterConfigWithMeta>>,
+  options: { minChars: number; minRepeats: number; includeSimilar: boolean; similarityThreshold: number },
+): Promise<QueueReport> {
+  const auditReport = await auditRules(files, {
+    minChars: options.minChars,
+    minRepeats: options.minRepeats,
+    includeSimilar: options.includeSimilar,
+    similarityThreshold: options.similarityThreshold,
+  });
+  auditReport.configPath = loadedConfig.path;
+  auditReport.preset = preset || null;
+  auditReport.discoveredFiles = discoveredFiles;
+  const sourceReport = await analyzeInstructionSources(files);
+  sourceReport.preset = preset || null;
+  sourceReport.discoveredFiles = discoveredFiles;
+  const decisionReport = decisionReportForSources(sourceReport, await loadDecisionLedger(ledgerPath), ledgerPath);
+  return buildReviewQueue(auditReport, decisionReport);
 }
 
 async function run(argv: string[]): Promise<number> {
@@ -393,15 +454,12 @@ async function run(argv: string[]): Promise<number> {
     assertFiles(files);
     assertLedgerPathSafe(ledgerPath, files);
 
-    const auditReport = await auditRules(files, { minChars, minRepeats, includeSimilar, similarityThreshold });
-    auditReport.configPath = loadedConfig.path;
-    auditReport.preset = preset || null;
-    auditReport.discoveredFiles = discoveredFiles;
-    const sourceReport = await analyzeInstructionSources(files);
-    sourceReport.preset = preset || null;
-    sourceReport.discoveredFiles = discoveredFiles;
-    const decisionReport = decisionReportForSources(sourceReport, await loadDecisionLedger(ledgerPath), ledgerPath);
-    const report = buildReviewQueue(auditReport, decisionReport);
+    const report = await queueReportForFiles(files, discoveredFiles, preset, ledgerPath, loadedConfig, {
+      minChars,
+      minRepeats,
+      includeSimilar,
+      similarityThreshold,
+    });
 
     if (format === "json") {
       console.log(JSON.stringify(report, null, 2));
@@ -411,6 +469,54 @@ async function run(argv: string[]): Promise<number> {
       console.log(formatQueueTable(report));
     }
     const failed = queueFailOnMatched(report, failOn);
+    if (failed) console.error(`rulemeter: --fail-on ${failOn} matched`);
+    return failed ? 1 : 0;
+  }
+  if (command === "run") {
+    if (args[0] === "--help" || args[0] === "-h") {
+      console.log(runHelp());
+      return 0;
+    }
+    const configPath = takeValue(args, "--config", "");
+    const loadedConfig = await loadRulemeterConfigWithMeta(configPath || undefined);
+    const config: RulemeterConfig = loadedConfig.config;
+    const json = takeBool(args, "--json");
+    const format = parseAuditFormat(takeValue(args, "--format", ""), json);
+    const ledgerPath = takeValue(args, "--ledger", DEFAULT_DECISION_LEDGER_PATH);
+    const statePath = takeValue(args, "--state", DEFAULT_STATE_PATH);
+    const updateState = takeBool(args, "--update-state");
+    const failOn = parseRunFailOn(takeValue(args, "--fail-on", ""));
+    const includeSimilar = takeBool(args, "--experimental-similar");
+    const similarityThreshold = thresholdNumber(takeValue(args, "--similarity-threshold", "0.65"), "--similarity-threshold");
+    const minChars = positiveInteger(takeValue(args, "--min-chars", String(config.minChars ?? 40)), "--min-chars");
+    const minRepeats = positiveInteger(takeValue(args, "--min-repeats", String(config.minRepeats ?? 2)), "--min-repeats");
+    const preset = takeValue(args, "--preset", args.length === 0 ? "all" : "");
+    assertPreset(preset);
+    assertNoUnknownFlags(args);
+    const discoveredFiles = preset ? await discoverPresetFiles(preset) : [];
+    const files = unique([...args, ...discoveredFiles]);
+    assertFilesFound(files, preset, "run");
+    assertFiles(files);
+    assertLedgerPathSafe(ledgerPath, files);
+    assertWritePathSafe("--state", statePath, files);
+
+    const queueReport = await queueReportForFiles(files, discoveredFiles, preset, ledgerPath, loadedConfig, {
+      minChars,
+      minRepeats,
+      includeSimilar,
+      similarityThreshold,
+    });
+    const { report, nextState } = buildRunReport(queueReport, await loadRulemeterState(statePath), { statePath, updateState });
+    if (updateState) await writeRulemeterState(nextState, statePath);
+
+    if (format === "json") {
+      console.log(JSON.stringify(report, null, 2));
+    } else if (format === "markdown") {
+      console.log(formatRunMarkdown(report));
+    } else {
+      console.log(formatRunTable(report));
+    }
+    const failed = runFailOnMatched(report as RunReport, failOn);
     if (failed) console.error(`rulemeter: --fail-on ${failOn} matched`);
     return failed ? 1 : 0;
   }

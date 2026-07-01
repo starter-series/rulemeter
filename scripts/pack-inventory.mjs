@@ -25,6 +25,8 @@ export const expectedPackFiles = [
   "dist/schema.js",
   "dist/sources.d.ts",
   "dist/sources.js",
+  "dist/state.d.ts",
+  "dist/state.js",
   "docs/release-checklist.md",
   "docs/validation.md",
   "package.json",

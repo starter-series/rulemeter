@@ -1,6 +1,7 @@
 import type { AuditReport, RiskSummary, RuleCandidate, SimilarRuleCandidate, SurfaceOverlap } from "./audit.js";
 import type { DecisionReport } from "./decisions.js";
 import type { QueueReport } from "./queue.js";
+import type { ResolvedRunItem, RunItem, RunReport } from "./state.js";
 import type { SourceReport } from "./sources.js";
 
 function riskText(candidate: RuleCandidate): string {
@@ -508,5 +509,149 @@ export function formatQueueMarkdown(report: QueueReport): string {
       ].join(" | ")} |`,
     );
   }
+  return lines.join("\n");
+}
+
+function runDeltaItems(report: RunReport): RunItem[] {
+  return report.items.filter((item) => item.status === "new" || item.status === "changed");
+}
+
+function runStatusText(item: RunItem | ResolvedRunItem): string {
+  if (item.status === "new") return "new";
+  if (item.status === "changed") return "changed";
+  if (item.status === "resolved") return "resolved";
+  return "known";
+}
+
+export function formatRunTable(report: RunReport): string {
+  const lines: string[] = [];
+  if (report.configPath) lines.push(`config: ${report.configPath}`);
+  if (report.preset) lines.push(`preset: ${report.preset}`);
+  if (report.discoveredFiles && report.discoveredFiles.length > 0) {
+    lines.push(`discovered_files: ${report.discoveredFiles.join(", ")}`);
+  }
+  lines.push(`ledger: ${report.ledgerPath}`);
+  lines.push(`state: ${report.statePath}`);
+  lines.push(`state_updated: ${report.stateUpdated ? "yes" : "no"}`);
+  lines.push(
+    `run: ${report.counts.new} new, ${report.counts.changed} changed, ${report.counts.resolved} resolved, ${report.counts.known} known`,
+  );
+
+  const deltaItems = runDeltaItems(report);
+  if (deltaItems.length === 0 && report.resolvedItems.length === 0) {
+    lines.push("No new, changed, or resolved review queue items.");
+    return lines.join("\n");
+  }
+
+  if (deltaItems.length > 0) {
+    lines.push("Current delta items:");
+    const headers = ["id", "status", "priority", "kind", "action", "signal", "paths", "locations", "message"];
+    const rows = deltaItems.map((item) => [
+      item.id,
+      runStatusText(item),
+      item.priority,
+      item.kind,
+      item.action,
+      item.signal,
+      queuePathsText(item.paths),
+      queueLocationsText(item.locations),
+      item.message,
+    ]);
+    const widths = headers.map((header, index) => Math.max(header.length, ...rows.map((row) => row[index]?.length ?? 0)));
+    lines.push(headers.map((header, index) => header.padEnd(widths[index] ?? header.length)).join("  "));
+    lines.push(widths.map((width) => "-".repeat(width)).join("  "));
+    for (const row of rows) {
+      lines.push(row.map((value, index) => value.padEnd(widths[index] ?? value.length)).join("  "));
+    }
+  }
+
+  if (report.resolvedItems.length > 0) {
+    lines.push("", "Resolved items:");
+    const headers = ["id", "status", "priority", "kind", "signal", "paths", "last_seen"];
+    const rows = report.resolvedItems.map((item) => [
+      item.id,
+      runStatusText(item),
+      item.priority,
+      item.kind,
+      item.signal,
+      queuePathsText(item.paths),
+      item.lastSeenAt,
+    ]);
+    const widths = headers.map((header, index) => Math.max(header.length, ...rows.map((row) => row[index]?.length ?? 0)));
+    lines.push(headers.map((header, index) => header.padEnd(widths[index] ?? header.length)).join("  "));
+    lines.push(widths.map((width) => "-".repeat(width)).join("  "));
+    for (const row of rows) {
+      lines.push(row.map((value, index) => value.padEnd(widths[index] ?? value.length)).join("  "));
+    }
+  }
+
+  return lines.join("\n");
+}
+
+export function formatRunMarkdown(report: RunReport): string {
+  const lines: string[] = ["# RuleMeter Run", ""];
+  if (report.configPath) lines.push(`- config: \`${report.configPath}\``);
+  if (report.preset) lines.push(`- preset: \`${report.preset}\``);
+  lines.push(`- files: ${report.files.length}`);
+  lines.push(`- ledger: \`${report.ledgerPath}\``);
+  lines.push(`- state: \`${report.statePath}\``);
+  lines.push(`- state updated: ${report.stateUpdated ? "yes" : "no"}`);
+  lines.push(`- current queue items: ${report.counts.totalCurrent}`);
+  lines.push(`- new: ${report.counts.new}`);
+  lines.push(`- changed: ${report.counts.changed}`);
+  lines.push(`- resolved: ${report.counts.resolved}`);
+  lines.push(`- known: ${report.counts.known}`);
+  lines.push(`- new review items: ${report.counts.newReview}`);
+  lines.push(`- changed review items: ${report.counts.changedReview}`);
+  if (report.discoveredFiles && report.discoveredFiles.length > 0) {
+    lines.push(`- discovered files: ${report.discoveredFiles.map((file) => `\`${file}\``).join(", ")}`);
+  }
+
+  const deltaItems = runDeltaItems(report);
+  if (deltaItems.length === 0 && report.resolvedItems.length === 0) {
+    lines.push("", "No new, changed, or resolved review queue items.");
+    return lines.join("\n");
+  }
+
+  if (deltaItems.length > 0) {
+    lines.push("", "## Current Delta Items", "");
+    lines.push("| ID | Status | Priority | Kind | Action | Signal | Paths | Locations | Message |");
+    lines.push("|---|---|---|---|---|---|---|---|---|");
+    for (const item of deltaItems) {
+      lines.push(
+        `| ${[
+          `\`${escapeMarkdown(item.id)}\``,
+          escapeMarkdown(runStatusText(item)),
+          escapeMarkdown(item.priority),
+          escapeMarkdown(item.kind),
+          escapeMarkdown(item.action),
+          escapeMarkdown(item.signal),
+          escapeMarkdown(queuePathsText(item.paths)),
+          escapeMarkdown(queueLocationsText(item.locations)),
+          escapeMarkdown(item.message),
+        ].join(" | ")} |`,
+      );
+    }
+  }
+
+  if (report.resolvedItems.length > 0) {
+    lines.push("", "## Resolved Items", "");
+    lines.push("| ID | Status | Priority | Kind | Signal | Paths | Last Seen |");
+    lines.push("|---|---|---|---|---|---|---|");
+    for (const item of report.resolvedItems) {
+      lines.push(
+        `| ${[
+          `\`${escapeMarkdown(item.id)}\``,
+          escapeMarkdown(runStatusText(item)),
+          escapeMarkdown(item.priority),
+          escapeMarkdown(item.kind),
+          escapeMarkdown(item.signal),
+          escapeMarkdown(queuePathsText(item.paths)),
+          escapeMarkdown(item.lastSeenAt),
+        ].join(" | ")} |`,
+      );
+    }
+  }
+
   return lines.join("\n");
 }
