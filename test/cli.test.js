@@ -307,6 +307,24 @@ test("CLI run writes local state and reports only review deltas", async () => {
   assert.match(markdown.stdout, /No new, changed, or resolved review queue items/);
 });
 
+test("CLI run rejects state updates combined with fail-on gates", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "rulemeter-run-fail-update-test-"));
+  const text = "- Keep implementation local and verify before reporting.";
+  await writeFile(join(dir, "AGENTS.md"), `${text}\n${text}\n`, "utf8");
+
+  await assert.rejects(
+    execFileAsync(process.execPath, [cliPath, "run", "--json", "--min-chars", "5", "--update-state", "--fail-on", "new-review"], { cwd: dir }),
+    (error) => {
+      const payload = JSON.parse(error.stderr);
+      assert.equal(error.code, 2);
+      assert.equal(payload.schemaVersion, "rulemeter.error.v1");
+      assert.equal(payload.error.code, "INVALID_OPTION");
+      assert.match(payload.error.message, /cannot be combined/);
+      return true;
+    },
+  );
+});
+
 test("CLI audit reads config file", async () => {
   const path = await fixture();
   const dir = await mkdtemp(join(tmpdir(), "rulemeter-config-test-"));

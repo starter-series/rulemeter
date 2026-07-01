@@ -486,6 +486,9 @@ async function run(argv: string[]): Promise<number> {
     const statePath = takeValue(args, "--state", DEFAULT_STATE_PATH);
     const updateState = takeBool(args, "--update-state");
     const failOn = parseRunFailOn(takeValue(args, "--fail-on", ""));
+    if (updateState && failOn) {
+      throw new CliError("INVALID_OPTION", "--update-state cannot be combined with --fail-on; review failing deltas first, then update state");
+    }
     const includeSimilar = takeBool(args, "--experimental-similar");
     const similarityThreshold = thresholdNumber(takeValue(args, "--similarity-threshold", "0.65"), "--similarity-threshold");
     const minChars = positiveInteger(takeValue(args, "--min-chars", String(config.minChars ?? 40)), "--min-chars");
