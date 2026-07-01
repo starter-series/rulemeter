@@ -176,8 +176,10 @@ Use `--preset <name>` to discover known agent-instruction files from the current
 |---|---|
 | `codex` | `AGENTS.md`, `AGENTS.override.md` in the repo tree |
 | `claude` | `CLAUDE.md`, `.claude/CLAUDE.md`, `.claude/rules/**/*.md`, `.claude/skills/**/*.md` |
-| `copilot` | `AGENTS.md`, `AGENTS.override.md`, root `CLAUDE.md`, root `GEMINI.md`, `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md` |
-| `antigravity` | root `AGENTS.md`, root `GEMINI.md`, `.agents/agents.md`, `.agents/skills/**/*.md`, `.agents/workflows/**/*.md` |
+| `copilot` | `AGENTS.md`, `AGENTS.override.md`, root `CLAUDE.md`, root `GEMINI.md`, `.github/copilot-instructions.md`, `.github/instructions/**/*.instructions.md` |
+| `antigravity` | `AGENTS.md`, `GEMINI.md`, `.agents/agents.md`, `.agents/rules/**/*.md`, `.agents/skills/**/*.md`, `.agents/workflows/**/*.md` |
+| `cursor` | `AGENTS.md`, `AGENTS.override.md`, `.cursorrules`, `.cursor/rules/**/*.md`, `.cursor/rules/**/*.mdc` |
+| `vscode` | `AGENTS.md`, `AGENTS.override.md`, `CLAUDE.md`, `.claude/CLAUDE.md`, `.claude/rules/**/*.md`, `.github/copilot-instructions.md`, `.github/instructions/**/*.instructions.md` |
 | `all` | Union of all presets |
 
 Preview discovery without auditing:

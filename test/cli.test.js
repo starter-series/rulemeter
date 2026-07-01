@@ -465,9 +465,47 @@ test("CLI preset discovers Codex instruction files", async () => {
   assert.equal(payload.surfaceOverlaps[0].recommendation, "review_duplicate");
 });
 
+test("CLI preset discovers Cursor and VS Code instruction files", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "rulemeter-editor-preset-test-"));
+  await mkdir(join(dir, ".cursor", "rules", "frontend"), { recursive: true });
+  await mkdir(join(dir, ".github", "instructions", "review"), { recursive: true });
+  await mkdir(join(dir, ".claude", "rules"), { recursive: true });
+  await writeFile(join(dir, "AGENTS.md"), "# Agents\n", "utf8");
+  await writeFile(join(dir, ".cursorrules"), "# Legacy Cursor\n", "utf8");
+  await writeFile(join(dir, ".cursor", "rules", "frontend", "react.mdc"), "# Cursor MDC\n", "utf8");
+  await writeFile(join(dir, ".cursor", "rules", "backend.md"), "# Cursor Markdown\n", "utf8");
+  await writeFile(join(dir, ".github", "copilot-instructions.md"), "# Copilot\n", "utf8");
+  await writeFile(join(dir, ".github", "instructions", "review", "security.instructions.md"), "# Review\n", "utf8");
+  await writeFile(join(dir, "CLAUDE.md"), "# Claude\n", "utf8");
+  await writeFile(join(dir, ".claude", "rules", "typescript.md"), "# Claude Rule\n", "utf8");
+
+  const cursor = await execFileAsync(process.execPath, [cliPath, "audit", "--preset", "cursor", "--list-files", "--json"], {
+    cwd: dir,
+  });
+  assert.deepEqual(JSON.parse(cursor.stdout).files, [
+    ".cursor/rules/backend.md",
+    ".cursor/rules/frontend/react.mdc",
+    ".cursorrules",
+    "AGENTS.md",
+  ]);
+
+  const vscode = await execFileAsync(process.execPath, [cliPath, "audit", "--preset", "vscode", "--list-files", "--json"], {
+    cwd: dir,
+  });
+  assert.deepEqual(JSON.parse(vscode.stdout).files, [
+    ".claude/rules/typescript.md",
+    ".github/copilot-instructions.md",
+    ".github/instructions/review/security.instructions.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+  ]);
+});
+
 test("CLI list-files JSON reports all preset discovery", async () => {
   const dir = await mkdtemp(join(tmpdir(), "rulemeter-list-test-"));
   await mkdir(join(dir, ".github", "instructions"), { recursive: true });
+  await mkdir(join(dir, ".cursor", "rules"), { recursive: true });
+  await mkdir(join(dir, ".agents", "rules"), { recursive: true });
   await mkdir(join(dir, ".agents", "skills", "review"), { recursive: true });
   await mkdir(join(dir, ".agents", "workflows"), { recursive: true });
   await mkdir(join(dir, "fixtures"), { recursive: true });
@@ -476,7 +514,10 @@ test("CLI list-files JSON reports all preset discovery", async () => {
   await writeFile(join(dir, "GEMINI.md"), "# Gemini\n", "utf8");
   await writeFile(join(dir, ".github", "copilot-instructions.md"), "# Copilot\n", "utf8");
   await writeFile(join(dir, ".github", "instructions", "review.instructions.md"), "# Review\n", "utf8");
+  await writeFile(join(dir, ".cursor", "rules", "react.mdc"), "# Cursor\n", "utf8");
+  await writeFile(join(dir, ".cursorrules"), "# Legacy Cursor\n", "utf8");
   await writeFile(join(dir, ".agents", "agents.md"), "# Antigravity\n", "utf8");
+  await writeFile(join(dir, ".agents", "rules", "review.md"), "# Antigravity Rule\n", "utf8");
   await writeFile(join(dir, ".agents", "skills", "review", "SKILL.md"), "# Skill\n", "utf8");
   await writeFile(join(dir, ".agents", "workflows", "ship.md"), "# Workflow\n", "utf8");
   await writeFile(join(dir, "fixtures", "AGENTS.md"), "# Fixture\n", "utf8");
@@ -489,8 +530,11 @@ test("CLI list-files JSON reports all preset discovery", async () => {
   assert.equal(payload.preset, "all");
   assert.deepEqual(payload.files, [
     ".agents/agents.md",
+    ".agents/rules/review.md",
     ".agents/skills/review/SKILL.md",
     ".agents/workflows/ship.md",
+    ".cursor/rules/react.mdc",
+    ".cursorrules",
     ".github/copilot-instructions.md",
     ".github/instructions/review.instructions.md",
     "AGENTS.md",

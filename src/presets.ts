@@ -1,9 +1,9 @@
 import { readdir } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 
-export type PresetName = "codex" | "claude" | "copilot" | "antigravity" | "all";
+export type PresetName = "codex" | "claude" | "copilot" | "antigravity" | "cursor" | "vscode" | "all";
 
-export const presetNames: PresetName[] = ["codex", "claude", "copilot", "antigravity", "all"];
+export const presetNames: PresetName[] = ["codex", "claude", "copilot", "antigravity", "cursor", "vscode", "all"];
 
 const ignoredDirectories = new Set([
   ".git",
@@ -66,20 +66,35 @@ function matchesCopilot(path: string): boolean {
   if (matchesCodex(path)) return true;
   if (path === "CLAUDE.md" || path === "GEMINI.md") return true;
   if (path === ".github/copilot-instructions.md") return true;
-  return /^\.github\/instructions\/[^/]+\.instructions\.md$/u.test(path);
+  return /^\.github\/instructions\/.+\.instructions\.md$/u.test(path);
 }
 
 function matchesAntigravity(path: string): boolean {
-  if (path === "AGENTS.md" || path === "GEMINI.md") return true;
+  if (basename(path) === "AGENTS.md" || basename(path) === "GEMINI.md") return true;
   if (path === ".agents/agents.md") return true;
-  return /^\.agents\/(?:skills|workflows)\/.+\.md$/u.test(path);
+  return /^\.agents\/(?:rules|skills|workflows)\/.+\.md$/u.test(path);
+}
+
+function matchesCursor(path: string): boolean {
+  if (matchesCodex(path)) return true;
+  if (path === ".cursorrules") return true;
+  return /^\.cursor\/rules\/.+\.(?:md|mdc)$/u.test(path);
+}
+
+function matchesVsCode(path: string): boolean {
+  if (matchesCodex(path)) return true;
+  if (matchesClaude(path)) return true;
+  if (path === ".github/copilot-instructions.md") return true;
+  return /^\.github\/instructions\/.+\.instructions\.md$/u.test(path);
 }
 
 function matchesPreset(path: string, preset: Exclude<PresetName, "all">): boolean {
   if (preset === "codex") return matchesCodex(path);
   if (preset === "claude") return matchesClaude(path);
   if (preset === "copilot") return matchesCopilot(path);
-  return matchesAntigravity(path);
+  if (preset === "antigravity") return matchesAntigravity(path);
+  if (preset === "cursor") return matchesCursor(path);
+  return matchesVsCode(path);
 }
 
 export async function discoverPresetFiles(preset: string, root = process.cwd()): Promise<string[]> {
