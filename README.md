@@ -255,6 +255,8 @@ rulemeter run --fail-on new-review
 
 By default, `run` reads `.rulemeter/state.json` if it exists and prints a delta report without writing state. Add `--update-state` after a reviewed run to record the current queue fingerprints. The state file tracks queue item metadata and hashes only; it does not copy instruction-file text.
 
+`--update-state` cannot be combined with `--fail-on`. Run fail-on gates before review, then update state only after the delta has been accepted or handled.
+
 Run statuses:
 
 | Status | Meaning |
