@@ -6,12 +6,12 @@
     <title>RuleMeter</title>
     <meta
       name="description"
-      content="RuleMeter is a report-only review aid for agent instruction duplicates, cross-file overlaps, source topology decisions, and review queues."
+      content="RuleMeter is a local instruction governance engine for agent instruction files, source topology, owner decisions, and repeat-run review deltas."
     />
     <meta property="og:title" content="RuleMeter" />
     <meta
       property="og:description"
-      content="A best-effort review aid for same-file duplicates, cross-file verbatim overlaps, source topology, local decision ledgers, and scoreless review queues."
+      content="A local governance primitive for same-file duplicates, cross-file verbatim overlaps, source topology, owner decision ledgers, and stateful review deltas."
     />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://starter-series.github.io/rulemeter/" />
@@ -46,8 +46,8 @@
         <div class="hero-copy">
           <h1 data-i18n="hero.title">Review agent rules without pretending the lint is exhaustive.</h1>
           <p data-i18n="hero.body">
-            RuleMeter is a report-only review aid for same-file duplicate instructions,
-            cross-file verbatim overlaps, source topology, scoreless queues, and optional near-duplicate review prompts.
+            RuleMeter tracks source topology, repeated rules, owner-ratified exceptions,
+            and new review deltas across local agent instruction files.
           </p>
           <div class="actions">
             <a class="button primary" href="https://github.com/starter-series/rulemeter" data-i18n="hero.primary">View on GitHub</a>
@@ -73,20 +73,20 @@ strategy: single_source
 rulemeter decisions
 pending: 0, stale: 0
 
-rulemeter queue --fail-on review
-review: 1, hints: 3
+rulemeter run --update-state
+new: 1, changed: 0, resolved: 0
 
-next: paste report into PR review
+next: review only new deltas
 standalone: deferred</code></pre>
         </div>
       </section>
 
       <section id="workflow" class="section">
         <div>
-          <h2 data-i18n="workflow.title">Report first, rewrite never.</h2>
+          <h2 data-i18n="workflow.title">Track deltas, rewrite never.</h2>
           <p data-i18n="workflow.body">
-            RuleMeter does not edit files. It gives maintainers evidence for cross-file verbatim overlap,
-            same-file repetition, and what deserves review, while documenting that keyword hits are not coverage guarantees.
+            RuleMeter does not edit instruction files. It keeps local evidence for cross-file verbatim overlap,
+            same-file repetition, owner decisions, and what changed since the last reviewed run.
           </p>
         </div>
         <ol class="steps">
@@ -107,8 +107,8 @@ standalone: deferred</code></pre>
           </li>
           <li>
             <span>04</span>
-            <strong data-i18n="workflow.step4.title">Ratify intentional topology</strong>
-            <p data-i18n="workflow.step4.body">Store owner-approved topology decisions in a local ledger without editing instruction files.</p>
+            <strong data-i18n="workflow.step4.title">Review only new deltas</strong>
+            <p data-i18n="workflow.step4.body">Use the local state file to separate new, changed, known, and resolved review work.</p>
           </li>
         </ol>
       </section>

@@ -71,7 +71,13 @@ try {
     throw new Error("queue smoke did not return a valid rulemeter.queue.v1 payload");
   }
 
-  console.log(`install smoke ok: ${pack.name}@${pack.version} (${pack.entryCount} files, audit v2, sources v1, decisions v1, queue v1)`);
+  const runOutput = run("npx", ["rulemeter", "run", "--json", "--min-chars", "10", "--update-state"], { cwd: consumer });
+  const runReport = JSON.parse(runOutput);
+  if (runReport.schemaVersion !== "rulemeter.run.v1" || runReport.counts.newReview !== 1 || !runReport.stateUpdated) {
+    throw new Error("run smoke did not return a valid rulemeter.run.v1 stateful payload");
+  }
+
+  console.log(`install smoke ok: ${pack.name}@${pack.version} (${pack.entryCount} files, audit v2, sources v1, decisions v1, queue v1, run v1)`);
 } finally {
   if (process.env.RULEMETER_KEEP_SMOKE_DIR) {
     console.log(`kept smoke directory: ${tempRoot}`);

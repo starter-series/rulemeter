@@ -41,6 +41,8 @@ export {
   formatDecisionsTable,
   formatQueueMarkdown,
   formatQueueTable,
+  formatRunMarkdown,
+  formatRunTable,
   formatSourcesMarkdown,
   formatSourcesTable,
 } from "./format.js";
@@ -56,11 +58,29 @@ export {
   type SourceStrategy,
 } from "./sources.js";
 export {
+  buildRunReport,
+  DEFAULT_STATE_PATH,
+  loadRulemeterState,
+  runFailOnMatched,
+  writeRulemeterState,
+  type BuildRunReportOptions,
+  type BuildRunReportResult,
+  type ResolvedRunItem,
+  type RulemeterState,
+  type RulemeterStateItem,
+  type RunFailOn,
+  type RunItem,
+  type RunItemStatus,
+  type RunReport,
+} from "./state.js";
+export {
   AUDIT_SCHEMA_VERSION,
   DECISIONS_SCHEMA_VERSION,
   DISCOVERY_SCHEMA_VERSION,
   ERROR_SCHEMA_VERSION,
   QUEUE_SCHEMA_VERSION,
+  RUN_SCHEMA_VERSION,
   SOURCES_SCHEMA_VERSION,
+  STATE_SCHEMA_VERSION,
   type RulemeterWarning,
 } from "./schema.js";

@@ -1,7 +1,7 @@
 {
   "name": "rulemeter",
   "version": "0.1.0",
-  "description": "Read-only review aid for agent instruction duplicates and cross-file overlaps.",
+  "description": "Local instruction governance engine for agent instruction files.",
   "homepage": "https://starter-series.github.io/rulemeter/",
   "type": "module",
   "bin": {
