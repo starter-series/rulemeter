@@ -126,12 +126,20 @@ function splitAssignments(documents, holdoutRatio) {
 }
 
 async function existingLabels(path) {
+  let raw;
   try {
-    const manifest = JSON.parse(await readFile(path, "utf8"));
-    if (manifest && typeof manifest.labels === "object" && !Array.isArray(manifest.labels)) return manifest.labels;
-  } catch {
-    return {};
+    raw = await readFile(path, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return {};
+    throw new UsageError(`failed to read existing manifest ${path}: ${error.message}`);
   }
+  let manifest;
+  try {
+    manifest = JSON.parse(raw);
+  } catch (error) {
+    throw new UsageError(`existing manifest ${path} is not valid JSON: ${error.message}`);
+  }
+  if (manifest && typeof manifest.labels === "object" && !Array.isArray(manifest.labels)) return manifest.labels;
   return {};
 }
 
