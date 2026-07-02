@@ -191,6 +191,54 @@ test("experimental similar candidates find near duplicate rules", async () => {
   assert.ok(report.similarCandidates[0].similarity >= 0.5);
 });
 
+test("yaml frontmatter is skipped as instruction text", async () => {
+  const skillText = [
+    "---",
+    "name: deploy",
+    "description: Rotate the API key and review the security policy before deploying.",
+    "---",
+    "- Follow the deploy checklist and keep changes narrowly scoped.",
+    "",
+  ].join("\n");
+  const report = await auditDocuments(
+    [
+      { id: ".claude/skills/deploy/SKILL.md", text: skillText },
+      { id: ".claude/skills/release/SKILL.md", text: skillText },
+    ],
+    { minChars: 5 },
+  );
+
+  assert.equal(report.riskFindings.length, 0);
+  assert.equal(report.candidates.length, 0);
+  assert.equal(report.surfaceOverlaps.length, 1);
+  assert.ok(report.surfaceOverlaps[0].examples.every((example) => !example.text.includes("name: deploy")));
+});
+
+test("a leading thematic break without yaml keys does not swallow rules", async () => {
+  const report = await auditDocuments(
+    [
+      {
+        id: "CLAUDE.md",
+        text: [
+          "---",
+          "",
+          "- Never paste production credentials into chat logs anywhere.",
+          "- Never paste production credentials into chat logs anywhere.",
+          "",
+          "---",
+          "",
+          "- Tail rule after the second break.",
+          "",
+        ].join("\n"),
+      },
+    ],
+    { minChars: 10 },
+  );
+
+  assert.equal(report.candidates.length, 1);
+  assert.equal(report.candidates[0].repeats, 2);
+});
+
 test("identity and PII rules stay explicit", async () => {
   const path = await tempFile(
     "AGENTS.md",

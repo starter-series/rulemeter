@@ -150,7 +150,20 @@ export function extractSegments(source: string): Segment[] {
   };
 
   const lines = source.split(/\r?\n/u);
-  for (let index = 0; index < lines.length; index += 1) {
+  let startIndex = 0;
+  if ((lines[0] ?? "").trim() === "---") {
+    for (let index = 1; index < lines.length; index += 1) {
+      const closing = (lines[index] ?? "").trim();
+      if (closing === "---" || closing === "...") {
+        // Only treat the block as YAML frontmatter when it contains a
+        // key-like line; a leading thematic break must not swallow rules.
+        const block = lines.slice(1, index);
+        if (block.some((blockLine) => /^[\w-]+\s*:/u.test((blockLine ?? "").trim()))) startIndex = index + 1;
+        break;
+      }
+    }
+  }
+  for (let index = startIndex; index < lines.length; index += 1) {
     const lineNumber = index + 1;
     const line = lines[index] ?? "";
     const stripped = line.trim();

@@ -188,7 +188,7 @@ test("CLI sources emits source-of-truth topology JSON and Markdown", async () =>
 
   const json = await execFileAsync(process.execPath, [cliPath, "sources", "--json"], { cwd: dir });
   const payload = JSON.parse(json.stdout);
-  assert.equal(payload.schemaVersion, "rulemeter.sources.v1");
+  assert.equal(payload.schemaVersion, "rulemeter.sources.v2");
   assert.equal(payload.canonicalPath, "AGENTS.md");
   assert.equal(payload.files.find((file) => file.path === "CLAUDE.md").role, "import_alias");
   assert.equal(payload.files.find((file) => file.path === "GEMINI.md").role, "local_override");
