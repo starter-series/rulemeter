@@ -49,8 +49,8 @@ try {
 
   const sourcesOutput = run("npx", ["rulemeter", "sources", "--json"], { cwd: consumer });
   const sources = JSON.parse(sourcesOutput);
-  if (sources.schemaVersion !== "rulemeter.sources.v1" || sources.sourceStrategy !== "single_source") {
-    throw new Error("sources smoke did not return a valid rulemeter.sources.v1 single_source payload");
+  if (sources.schemaVersion !== "rulemeter.sources.v2" || sources.sourceStrategy !== "single_source") {
+    throw new Error("sources smoke did not return a valid rulemeter.sources.v2 single_source payload");
   }
 
   writeFileSync(join(consumer, "GEMINI.md"), "- Gemini keeps a local override for this consumer smoke.\n", "utf8");
@@ -77,7 +77,7 @@ try {
     throw new Error("run smoke did not return a valid rulemeter.run.v1 stateful payload");
   }
 
-  console.log(`install smoke ok: ${pack.name}@${pack.version} (${pack.entryCount} files, audit v2, sources v1, decisions v1, queue v1, run v1)`);
+  console.log(`install smoke ok: ${pack.name}@${pack.version} (${pack.entryCount} files, audit v2, sources v2, decisions v1, queue v1, run v1)`);
 } finally {
   if (process.env.RULEMETER_KEEP_SMOKE_DIR) {
     console.log(`kept smoke directory: ${tempRoot}`);

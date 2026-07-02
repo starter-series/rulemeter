@@ -28,7 +28,6 @@ export const riskRules: RiskRule[] = [
     patterns: [
       /\bpublic identity\b/i,
       /\bidentity\s+(?:rule|rules|policy|must|should|is|only|surface|surfaces)\b/i,
-      /\bHeznpc\b.*\b(?:only|public|identity|author|external)\b/i,
       /\bcommit author\b/i,
       /\bsole author\b/i,
       /\bCo-Authored-By\b/i,

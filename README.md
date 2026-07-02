@@ -76,7 +76,7 @@ npm run dogfood
 Machine-readable output includes a stable `schemaVersion`:
 
 - `rulemeter.audit.v2` for `audit --json`
-- `rulemeter.sources.v1` for `sources --json`
+- `rulemeter.sources.v2` for `sources --json`
 - `rulemeter.decisions.v1` for `decisions --json`
 - `rulemeter.queue.v1` for `queue --json`
 - `rulemeter.run.v1` for `run --json`
@@ -98,7 +98,7 @@ Important `audit --json` review keys:
 
 `surfaceOverlaps` summarizes exact cross-file overlaps by the set of files that share text. These are review prompts for parity or consolidation, not deletion instructions or semantic drift findings.
 
-`rulemeter.sources.v1` reports source-of-truth topology for agent instruction files using filesystem and syntax facts: symlinks, `@path.md` imports, byte-identical mirrors, and local overrides. It does not use semantic similarity or keyword-risk classification.
+`rulemeter.sources.v2` reports source-of-truth topology for agent instruction files using filesystem and syntax facts: symlinks, `@path.md` imports, byte-identical mirrors, supplemental layers, and local overrides. It does not use semantic similarity or keyword-risk classification. Import detection matches how agent harnesses read `@` references: text inside fenced code blocks and inline code spans is ignored, and the `@` must start a whitespace-separated token, so backticked examples and email-like text are not treated as imports.
 
 Human-readable `sources` reports classify files as:
 
@@ -106,8 +106,9 @@ Human-readable `sources` reports classify files as:
 |---|---|
 | `canonical` | Selected source file, usually `AGENTS.md` or the target referenced by other files. |
 | `symlink_alias` | File is a symlink to the canonical source. |
-| `import_alias` | File imports the canonical source with an `@path.md` reference. |
+| `import_alias` | File imports the canonical source with an `@path.md` reference and contains no other instruction text. A file that imports canonical but adds its own rules is reported as `local_override` instead. |
 | `verbatim_mirror` | File is byte-identical to canonical, but is not symlink/import-backed. |
+| `contextual_layer` | Supplemental instruction layer that loads in addition to the canonical source: nested `AGENTS.md`/`CLAUDE.md`/`GEMINI.md`, `CLAUDE.local.md`, and modular rule or skill files such as `.claude/rules/**`, `.claude/skills/**`, `.cursor/rules/**`, `.github/instructions/**`, and `.agents/rules|skills|workflows/**`. Not flagged as an override and does not create decision items. Exception: memory files directly under `.claude/` or `.agents/` (for example `.claude/CLAUDE.md`) are alternate root locations for the same memory, so a divergent copy is still reported as `local_override`. |
 | `local_override` | File differs from canonical and should be confirmed as intentional. |
 
 `rulemeter.decisions.v1` compares current source-topology warning fingerprints against `.rulemeter/decisions.json`. Decision keys are structural (`kind`, warning signal, subject path, and target path); evidence hashes are stored separately so a previously accepted local override can become `stale` when the underlying file content or topology evidence changes.
@@ -329,14 +330,16 @@ These are important safety rules, but the current keyword lint may not flag them
 
 - RuleMeter's default duplicate recommendations only group exact normalized same-file duplicate text.
 - Cross-file duplicate text is summarized as `surfaceOverlaps` because different agents may need explicit parallel instructions.
-- Source topology checks are filesystem/syntax checks only. They can identify symlinks, `@path.md` imports, byte-identical mirrors, and local overrides, but they do not infer whether two different files are semantically aligned.
+- Source topology checks are filesystem/syntax checks only. They can identify symlinks, `@path.md` imports, byte-identical mirrors, supplemental layers, and local overrides, but they do not infer whether two different files are semantically aligned.
+- Import detection ignores fenced code blocks and inline code spans, requires the `@` reference to start a whitespace-separated token, and only recognizes `.md`/`.txt` targets. Extension-less imports such as `@README` are not recognized yet.
+- Supplemental layers (nested memory files, `CLAUDE.local.md`, and modular rule/skill directories) are excluded from override warnings, but their text still participates in duplicate, overlap, and risk review during `audit`.
 - The review queue is an aggregation view over existing signals. It does not introduce a stronger classifier or product-quality score.
 - The stateful run report only compares deterministic queue fingerprints. It is an operating aid for repeat runs, not a behavioral evaluation of the agent harness.
 - Experimental similar-rule detection uses lexical overlap and is off by default. Treat `similarCandidates` as review prompts, not proof of semantic equivalence.
 - Similar-rule detection can catch near repeats such as reordered shared wording, but it can miss meaning-preserving rewrites that swap most vocabulary. Do not use it as a semantic drift detector.
 - Risk findings are keyword-based and non-exhaustive; they can produce both false positives and false negatives.
 - RuleMeter does not score an agent harness, evaluate model behavior, run red-team attacks, or open automated rewrite PRs. It reviews instruction-file surfaces only.
-- Markdown code fences, tables, blockquotes, and indented code are skipped; RuleMeter focuses on prose/list instruction text.
+- Markdown code fences, tables, blockquotes, indented code, and a leading YAML frontmatter block (one that contains key-like `name:` lines) are skipped; RuleMeter focuses on prose/list instruction text. Skill frontmatter metadata such as `description:` is therefore not audited as an instruction rule.
 - Wrapped list items are joined before comparison so line wrapping does not create separate fragment rules.
 
 ## Verification

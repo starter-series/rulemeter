@@ -289,6 +289,7 @@ function sourceRoleText(role: SourceReport["files"][number]["role"]): string {
   if (role === "import_alias") return "imports canonical";
   if (role === "symlink_alias") return "symlink alias";
   if (role === "verbatim_mirror") return "verbatim mirror";
+  if (role === "contextual_layer") return "supplemental layer";
   return "local override";
 }
 

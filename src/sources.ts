@@ -4,7 +4,7 @@ import { dirname, relative, resolve, sep } from "node:path";
 import type { RulemeterWarning } from "./schema.js";
 import { SOURCES_SCHEMA_VERSION } from "./schema.js";
 
-export type SourceRole = "canonical" | "import_alias" | "symlink_alias" | "verbatim_mirror" | "local_override";
+export type SourceRole = "canonical" | "import_alias" | "symlink_alias" | "verbatim_mirror" | "contextual_layer" | "local_override";
 export type SourceStrategy = "standalone" | "single_source" | "mixed" | "unresolved";
 
 export interface SourceImportReference {
@@ -60,11 +60,33 @@ function hashBytes(bytes: Buffer): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+function stripCodeRegions(text: string): string {
+  const lines: string[] = [];
+  let fenceMarker: string | null = null;
+  for (const line of text.split(/\r?\n/u)) {
+    const fence = /^\s*(`{3,}|~{3,})/u.exec(line);
+    if (fenceMarker) {
+      if (fence?.[1] && fence[1].startsWith(fenceMarker[0] ?? "") && fence[1].length >= fenceMarker.length) fenceMarker = null;
+      lines.push("");
+      continue;
+    }
+    if (fence?.[1]) {
+      fenceMarker = fence[1];
+      lines.push("");
+      continue;
+    }
+    lines.push(line);
+  }
+  // Replace inline code spans with a non-whitespace placeholder so a stripped
+  // span cannot fabricate the whitespace boundary the import syntax requires.
+  return lines.join("\n").replace(/``[^\n]*?``|`[^`\n]*`/gu, "\u0000");
+}
+
 function importReferences(text: string, filePath: string, root: string, scannedPaths: Set<string>): SourceImportReference[] {
   const references: SourceImportReference[] = [];
   const seen = new Set<string>();
-  const pattern = /@([^\s"'<>()[\]{}]+?\.(?:md|txt))/giu;
-  for (const match of text.matchAll(pattern)) {
+  const pattern = /(?<=^|\s)@([^\s"'<>()[\]{}]+?\.(?:md|txt))/gimu;
+  for (const match of stripCodeRegions(text).matchAll(pattern)) {
     const rawSpecifier = match[1];
     if (!rawSpecifier) continue;
     const specifier = rawSpecifier.replace(/[.,;:]+$/u, "");
@@ -76,6 +98,31 @@ function importReferences(text: string, filePath: string, root: string, scannedP
     references.push({ specifier, path, existsInScan: scannedPaths.has(path) });
   }
   return references;
+}
+
+const contextualDirectoryPattern = /^(?:\.claude\/(?:rules|skills)\/|\.agents\/(?:rules|skills|workflows)\/|\.cursor\/rules\/|\.github\/instructions\/)/u;
+const contextualBasenames = new Set(["AGENTS.md", "CLAUDE.md", "GEMINI.md"]);
+
+function isContextualLayerPath(path: string): boolean {
+  if (contextualDirectoryPattern.test(path)) return true;
+  const name = path.split("/").at(-1) ?? path;
+  if (name === "CLAUDE.local.md") return true;
+  if (!path.includes("/")) return false;
+  // Memory files directly under .claude/ or .agents/ are alternate root
+  // locations for the same memory, not per-directory layers.
+  const directory = path.slice(0, path.lastIndexOf("/"));
+  if (directory === ".claude" || directory === ".agents") return false;
+  return contextualBasenames.has(name);
+}
+
+function hasInstructionTextBeyondImports(text: string): boolean {
+  const withoutImports = stripCodeRegions(text).replace(/(?<=^|\s)@[^\s"'<>()[\]{}]+/gmu, " ");
+  for (const line of withoutImports.split(/\r?\n/u)) {
+    const stripped = line.trim();
+    if (stripped.length === 0 || stripped.startsWith("#")) continue;
+    if (/[\p{L}\p{N}]/u.test(stripped.replace(/^(?:[-*+]|\d+[.)])\s*/u, ""))) return true;
+  }
+  return false;
 }
 
 function canonicalPreference(path: string): number {
@@ -118,25 +165,36 @@ function roleFor(file: LoadedSource, canonical: LoadedSource | undefined, scanne
     return { role: "symlink_alias", evidence: `symlink to ${canonical.path}`, byteIdenticalTo: null };
   }
   const canonicalImport = file.imports.find((reference) => reference.path === canonical.path);
-  if (canonicalImport) {
+  const aliasEligible = !hasInstructionTextBeyondImports(file.text);
+  if (canonicalImport && aliasEligible) {
     return { role: "import_alias", evidence: `imports @${canonicalImport.specifier}`, byteIdenticalTo: null };
   }
   if (file.sha256 === canonical.sha256) {
     return { role: "verbatim_mirror", evidence: `byte-identical to ${canonical.path}`, byteIdenticalTo: canonical.path };
   }
+  if (isContextualLayerPath(file.path)) {
+    return { role: "contextual_layer", evidence: `supplemental layer loaded alongside ${canonical.path}`, byteIdenticalTo: null };
+  }
   if (file.isSymlink && file.symlinkTarget && !scannedPaths.has(file.symlinkTarget)) {
     return { role: "symlink_alias", evidence: `symlink target outside scan: ${file.symlinkTarget}`, byteIdenticalTo: null };
   }
   const scannedImport = file.imports.find((reference) => reference.existsInScan);
-  if (scannedImport) {
+  if (scannedImport && aliasEligible) {
     return { role: "import_alias", evidence: `imports @${scannedImport.specifier}`, byteIdenticalTo: null };
+  }
+  if (canonicalImport) {
+    return {
+      role: "local_override",
+      evidence: `imports @${canonicalImport.specifier} but adds instruction text beyond ${canonical.path}`,
+      byteIdenticalTo: null,
+    };
   }
   return { role: "local_override", evidence: `differs from ${canonical.path}`, byteIdenticalTo: null };
 }
 
 function sourceStrategy(files: SourceFile[], canonicalPath: string | null): SourceStrategy {
   if (files.length <= 1) return "standalone";
-  const nonCanonical = files.filter((file) => file.role !== "canonical");
+  const nonCanonical = files.filter((file) => file.role !== "canonical" && file.role !== "contextual_layer");
   if (nonCanonical.length === 0) return "standalone";
   if (
     canonicalPath &&
