@@ -2,7 +2,7 @@
   "name": "rulemeter",
   "version": "0.1.0",
   "description": "Local instruction governance engine for agent instruction files.",
-  "homepage": "https://starter-series.github.io/rulemeter/",
+  "homepage": "https://github.com/starter-series/create-starter#instruction-checks",
   "type": "module",
   "bin": {
     "rulemeter": "dist/cli.js"
@@ -54,5 +54,6 @@
   "devDependencies": {
     "@types/node": "^25.9.2",
     "typescript": "^6.0.3"
-  }
+  },
+  "private": true
 }
