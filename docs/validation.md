@@ -1,3 +1,5 @@
+> Archived historical documentation. Standalone releases have ended; current development is in [create-starter](https://github.com/starter-series/create-starter).
+
 # Corpus Validation
 
 RuleMeter is still a lab tool. Use corpus validation to collect evidence before public package publication or absorption into another CLI.

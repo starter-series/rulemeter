@@ -1,3 +1,5 @@
+> Archived historical documentation. Standalone releases have ended; current development is in [create-starter](https://github.com/starter-series/create-starter).
+
 # Release Checklist
 
 RuleMeter is still a lab tool. This checklist keeps npm publication deferred until real private-corpus evidence supports a standalone product claim.
